@@ -1,0 +1,177 @@
+#!/bin/bash
+# =============================================================================
+# OSS-CRS Entrypoint
+# =============================================================================
+# Runner for OSS-CRS framework.
+#
+# Usage:
+#   docker run crs-multilang-runner <harness_name>   # Run single harness
+#   docker run crs-multilang-runner list             # List available harnesses
+#   docker run crs-multilang-runner shell            # Interactive shell
+# =============================================================================
+
+set -e
+
+MODE="${1:-run-harness}"
+shift 2>/dev/null || true
+
+# System tuning
+sysctl -w fs.file-max=2097152 2>/dev/null || true
+ulimit -c 0 2>/dev/null || true
+
+# =============================================================================
+# Environment setup
+# =============================================================================
+export SRC_DIR="${SRC_DIR:-/src}"
+export OUT_DIR="${OUT_DIR:-/out}"
+export OUT="${OUT:-$OUT_DIR}"
+export OSS_CRS_ARTIFACTS_DIR="${OSS_CRS_ARTIFACTS_DIR:-/artifacts}"
+
+# =============================================================================
+# Helper functions
+# =============================================================================
+log() {
+    echo "[CRS] $*"
+}
+
+error() {
+    echo "[CRS] ERROR: $*" >&2
+    exit 1
+}
+
+list_harnesses() {
+    log "Available harnesses in $OUT_DIR:"
+    if [ -f "$OUT_DIR/aixcc_conf.yaml" ]; then
+        grep -A1 "name:" "$OUT_DIR/aixcc_conf.yaml" | grep -v "^--$" || true
+    fi
+    find "$OUT_DIR" -maxdepth 1 -type f -executable 2>/dev/null | while read f; do
+        basename "$f"
+    done
+}
+
+# =============================================================================
+# RUN-HARNESS (OSS-CRS mode)
+# =============================================================================
+do_run_harness() {
+    HARNESS="${1:-}"
+    shift 2>/dev/null || true
+
+    if [ -z "$HARNESS" ]; then
+        error "No harness specified. Usage: docker run <image> <harness_name>"
+    fi
+
+    log "=== OSS-CRS RUN ==="
+    log "Harness: $HARNESS"
+    log "CRS Name: ${CRS_NAME:-crs-multilang}"
+    log "CRS Target: ${CRS_TARGET:-unknown}"
+
+    # Validate input
+    [ -d "$OUT_DIR" ] || error "No $OUT_DIR directory mounted"
+
+    # Verify harness exists
+    if [ ! -x "$OUT_DIR/$HARNESS" ]; then
+        if [ -x "$OUT_DIR/${HARNESS}_fuzzer" ]; then
+            HARNESS="${HARNESS}_fuzzer"
+        elif [ -f "$OUT_DIR/$HARNESS" ]; then
+            chmod +x "$OUT_DIR/$HARNESS"
+        else
+            log "Warning: Harness binary not found at $OUT_DIR/$HARNESS"
+        fi
+    fi
+
+    export TARGET_HARNESS="$HARNESS"
+    export START_TIME="${START_TIME:-$(date +%s)}"
+
+    if [ -f "$OUT_DIR/aixcc_conf.yaml" ]; then
+        export AIXCC_CONFIG="$OUT_DIR/aixcc_conf.yaml"
+    fi
+
+    # Create output directories
+    mkdir -p "$OSS_CRS_ARTIFACTS_DIR/povs"
+    mkdir -p "$OSS_CRS_ARTIFACTS_DIR/corpus"
+    mkdir -p "$OSS_CRS_ARTIFACTS_DIR/crs-data"
+
+    # Log mode info
+    [ -f "/ref.diff" ] && log "Delta mode: /ref.diff"
+    [ -d "/seed_share_dir" ] && log "Ensemble mode: /seed_share_dir"
+
+    log "Output: $OSS_CRS_ARTIFACTS_DIR"
+    log "Starting fuzzing..."
+
+    # Run CRS (writes directly to /artifacts via CRSPaths)
+    main.py
+
+    log "Run complete. Results:"
+    log "  POVs: $(find $OSS_CRS_ARTIFACTS_DIR/povs -type f 2>/dev/null | wc -l) files"
+    log "  Corpus: $(find $OSS_CRS_ARTIFACTS_DIR/corpus -type f 2>/dev/null | wc -l) files"
+    log "  Coverage: $(find $OSS_CRS_ARTIFACTS_DIR/crs-data/coverage -type f 2>/dev/null | wc -l) files"
+}
+
+# =============================================================================
+# LIST HARNESSES
+# =============================================================================
+do_list() {
+    log "=== LIST HARNESSES ==="
+    list_harnesses
+}
+
+# =============================================================================
+# SHELL
+# =============================================================================
+do_shell() {
+    log "Interactive shell"
+    exec /bin/bash "$@"
+}
+
+# =============================================================================
+# HELP
+# =============================================================================
+do_help() {
+    cat << 'EOF'
+OSS-CRS Runner
+
+USAGE:
+    docker run crs-multilang-runner <harness_name>   Run fuzzing for harness
+    docker run crs-multilang-runner list             List available harnesses
+    docker run crs-multilang-runner shell            Interactive shell
+    docker run crs-multilang-runner help             Show this help
+
+ENVIRONMENT (set by OSS-CRS framework):
+    CRS_TARGET          Target project name
+    CRS_NAME            CRS identifier
+    FUZZING_LANGUAGE    Target language (c, c++, jvm)
+
+INPUTS:
+    /out/               Compiled fuzzers (from build phase)
+    /artifacts/         Persistent artifacts directory
+    /ref.diff           Diff file for delta mode (optional)
+    /seed_share_dir/    Ensemble shared seeds (optional)
+
+OUTPUTS:
+    /artifacts/povs/{harness}/              POVs discovered
+    /artifacts/corpus/{harness}/            Fuzzing corpus
+    /artifacts/crs-data/coverage/{harness}/ Coverage data
+EOF
+}
+
+# =============================================================================
+# Main dispatch
+# =============================================================================
+case "$MODE" in
+    run-harness)
+        do_run_harness "$@"
+        ;;
+    list|ls)
+        do_list "$@"
+        ;;
+    shell|bash|sh)
+        do_shell "$@"
+        ;;
+    help|--help|-h)
+        do_help
+        ;;
+    *)
+        # Default: treat as harness name
+        do_run_harness "$MODE" "$@"
+        ;;
+esac

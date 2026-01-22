@@ -1,0 +1,5 @@
+coloredlogs
+redis
+clang==14.0
+pyyaml
+loguru
