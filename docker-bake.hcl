@@ -1,24 +1,60 @@
 # =============================================================================
-# CRS-multilang Docker Bake Configuration
+# CRS-multilang Docker Bake Configuration (given_fuzzer variant)
 # =============================================================================
 #
 # Replaces multilang-all.sh with parallel builds and proper dependency tracking.
 #
 # Build order (with parallelism):
-#   parallel:  multilang-clang ─────────┐
-#                                       ├──► multilang-builder ──► crs-multilang
-#   parallel:  multilang-builder-jvm ───┘
+#   parallel:  multilang-given_fuzzer-clang ─────────┐
+#                                                    ├──► multilang-given_fuzzer-builder ──► multilang-given_fuzzer-crs
+#   parallel:  multilang-given_fuzzer-builder-jvm ───┘
 #
-# Usage:
-#   docker buildx bake prepare     # Build all base images
-#   docker buildx bake prepare-c   # Build C/C++ images only
-#   docker buildx bake prepare-jvm # Build JVM images only
-#   docker buildx bake --print     # Show build plan as JSON
+# Usage (OSS-CRS prepare phase - uses cached images from registry):
+#   docker buildx bake prepare        # Pull cached images from registry (default)
+#   docker buildx bake prepare-c      # C/C++ images only
+#   docker buildx bake prepare-jvm    # JVM images only
+#
+# Build from scratch (Team Atlanta):
+#   USE_PREBUILT=false docker buildx bake prepare
+#   docker buildx bake --push prepare  # Build and push to registry
+#
+# Show build plan:
+#   docker buildx bake --print
 #
 # =============================================================================
 
 variable "BASE_IMAGES_DIR" {
   default = "libs/oss-fuzz/infra/base-images"
+}
+
+variable "REGISTRY" {
+  default = "ghcr.io/team-atlanta"
+}
+
+variable "VERSION" {
+  default = "latest"
+}
+
+# When true (default): Pull cached images from registry, build only if cache miss
+# When false: Build everything from scratch locally
+variable "USE_PREBUILT" {
+  default = false
+}
+
+# Helper function to generate tags
+function "tags" {
+  params = [name]
+  result = [
+    "${REGISTRY}/${name}:${VERSION}",
+    "${REGISTRY}/${name}:latest",
+    "${name}:latest"
+  ]
+}
+
+# Helper to get image source (registry or local build target)
+function "image_source" {
+  params = [name]
+  result = USE_PREBUILT ? "docker-image://${REGISTRY}/${name}:${VERSION}" : "target:${name}"
 }
 
 # -----------------------------------------------------------------------------
@@ -30,20 +66,20 @@ group "default" {
 }
 
 group "prepare" {
-  targets = ["multilang-clang", "multilang-builder", "multilang-builder-jvm", "multilang-c-archive", "multilang-jvm-archive", "crs-multilang"]
+  targets = ["multilang-given_fuzzer-clang", "multilang-given_fuzzer-builder", "multilang-given_fuzzer-builder-jvm", "multilang-given_fuzzer-c-archive", "multilang-given_fuzzer-jvm-archive", "multilang-given_fuzzer-crs"]
 }
 
 group "prepare-c" {
-  targets = ["multilang-clang", "multilang-builder", "multilang-c-archive", "crs-multilang"]
+  targets = ["multilang-given_fuzzer-clang", "multilang-given_fuzzer-builder", "multilang-given_fuzzer-c-archive", "multilang-given_fuzzer-crs"]
 }
 
 group "prepare-jvm" {
-  targets = ["multilang-builder-jvm", "multilang-jvm-archive"]
+  targets = ["multilang-given_fuzzer-builder-jvm", "multilang-given_fuzzer-jvm-archive"]
 }
 
 # Archive images for extracting build artifacts
 group "archives" {
-  targets = ["multilang-c-archive", "multilang-jvm-archive"]
+  targets = ["multilang-given_fuzzer-c-archive", "multilang-given_fuzzer-jvm-archive"]
 }
 
 # -----------------------------------------------------------------------------
@@ -51,30 +87,33 @@ group "archives" {
 # -----------------------------------------------------------------------------
 
 # Custom LLVM/Clang with fuzzing support
-# Independent - can build in parallel with multilang-builder-jvm
-target "multilang-clang" {
+# Independent - can build in parallel with multilang-given_fuzzer-builder-jvm
+target "multilang-given_fuzzer-clang" {
   context    = "${BASE_IMAGES_DIR}/multilang-clang"
   dockerfile = "Dockerfile"
-  tags       = ["multilang-clang:latest"]
+  tags       = tags("multilang-given_fuzzer-clang")
+  cache-from = USE_PREBUILT ? ["type=registry,ref=${REGISTRY}/multilang-given_fuzzer-clang:${VERSION}"] : []
 }
 
 # C/C++ builder with Rust, Python, compile scripts
-# Depends on multilang-clang
-target "multilang-builder" {
+# Depends on multilang-given_fuzzer-clang
+target "multilang-given_fuzzer-builder" {
   context    = "${BASE_IMAGES_DIR}/base-builder"
   dockerfile = "Dockerfile.multilang"
-  tags       = ["multilang-builder:latest"]
+  tags       = tags("multilang-given_fuzzer-builder")
   contexts = {
-    multilang-clang = "target:multilang-clang"
+    multilang-clang = image_source("multilang-given_fuzzer-clang")
   }
+  cache-from = USE_PREBUILT ? ["type=registry,ref=${REGISTRY}/multilang-given_fuzzer-builder:${VERSION}"] : []
 }
 
 # JVM builder with Jazzer
-# Independent - can build in parallel with multilang-clang
-target "multilang-builder-jvm" {
+# Independent - can build in parallel with multilang-given_fuzzer-clang
+target "multilang-given_fuzzer-builder-jvm" {
   context    = "${BASE_IMAGES_DIR}/base-builder-jvm"
   dockerfile = "Dockerfile.multilang"
-  tags       = ["multilang-builder-jvm:latest"]
+  tags       = tags("multilang-given_fuzzer-builder-jvm")
+  cache-from = USE_PREBUILT ? ["type=registry,ref=${REGISTRY}/multilang-given_fuzzer-builder-jvm:${VERSION}"] : []
 }
 
 # -----------------------------------------------------------------------------
@@ -82,12 +121,11 @@ target "multilang-builder-jvm" {
 # -----------------------------------------------------------------------------
 
 # Main CRS image with UniAFL, llvm-cov-custom, FuzzDB, libCRS
-target "crs-multilang" {
+target "multilang-given_fuzzer-crs" {
   context    = "."
   dockerfile = "Dockerfile"
-  tags       = ["crs-multilang:latest"]
-  # Note: Dockerfile uses COPY --from=multilang-builder implicitly
-  # The FROM statements in Dockerfile handle dependencies
+  tags       = tags("multilang-given_fuzzer-crs")
+  cache-from = USE_PREBUILT ? ["type=registry,ref=${REGISTRY}/multilang-given_fuzzer-crs:${VERSION}"] : []
 }
 
 # -----------------------------------------------------------------------------
@@ -95,36 +133,39 @@ target "crs-multilang" {
 # -----------------------------------------------------------------------------
 
 # C/C++ archive - extracts llvm-patched, libclang_rt.fuzzer.a, compile
-target "multilang-c-archive" {
+target "multilang-given_fuzzer-c-archive" {
   context    = "."
   dockerfile = "Dockerfile.c_archive"
-  tags       = ["multilang-c-archive:latest"]
+  tags       = tags("multilang-given_fuzzer-c-archive")
   contexts = {
-    multilang-builder = "target:multilang-builder"
+    multilang-given_fuzzer-builder = image_source("multilang-given_fuzzer-builder")
   }
+  cache-from = USE_PREBUILT ? ["type=registry,ref=${REGISTRY}/multilang-given_fuzzer-c-archive:${VERSION}"] : []
 }
 
 # JVM archive - extracts Jazzer artifacts
-target "multilang-jvm-archive" {
+target "multilang-given_fuzzer-jvm-archive" {
   context    = "."
   dockerfile = "Dockerfile.jvm_archive"
-  tags       = ["multilang-jvm-archive:latest"]
+  tags       = tags("multilang-given_fuzzer-jvm-archive")
   contexts = {
-    multilang-builder-jvm = "target:multilang-builder-jvm"
+    multilang-given_fuzzer-builder-jvm = image_source("multilang-given_fuzzer-builder-jvm")
   }
+  cache-from = USE_PREBUILT ? ["type=registry,ref=${REGISTRY}/multilang-given_fuzzer-jvm-archive:${VERSION}"] : []
 }
 
 # -----------------------------------------------------------------------------
 # Runner Image (for OSS-CRS run phase)
 # -----------------------------------------------------------------------------
 
-# Thin runner that references crs-multilang
+# Thin runner that references multilang-given_fuzzer-crs
 # This can be customized for specific run configurations
-target "crs-multilang-runner" {
+target "multilang-given_fuzzer-runner" {
   context    = "."
   dockerfile = "runner.Dockerfile"
-  tags       = ["crs-multilang-runner:latest"]
+  tags       = tags("multilang-given_fuzzer-runner")
   contexts = {
-    crs-multilang = "target:crs-multilang"
+    multilang-given_fuzzer-crs = image_source("multilang-given_fuzzer-crs")
   }
+  cache-from = USE_PREBUILT ? ["type=registry,ref=${REGISTRY}/multilang-given_fuzzer-runner:${VERSION}"] : []
 }

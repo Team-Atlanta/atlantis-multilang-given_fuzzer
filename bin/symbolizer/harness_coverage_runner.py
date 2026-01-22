@@ -401,8 +401,8 @@ if __name__ == "__main__":
                 )
                 future.result(timeout=timeout_seconds)
             except Exception as e:
-                if self.bin_symbolizer:
-                    self.bin_symbolizer.symbolize(raw_cov_file, output_file)
+                if harness.bin_symbolizer:
+                    harness.bin_symbolizer.symbolize(raw_cov_file, output_file)
                 else:
                     with open(output_file, "wt") as f:
                         f.write(json.dumps({}))

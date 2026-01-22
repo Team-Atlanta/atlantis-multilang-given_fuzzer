@@ -4,7 +4,7 @@ ENV DEBIAN_FRONTEND=noninteractive
 
 RUN apt update && \
     apt upgrade -y && \
-    apt install -y build-essential zlib1g-dev ninja-build ca-certificates gpg wget lsb-release software-properties-common
+    apt install -y build-essential zlib1g-dev ninja-build ca-certificates gpg wget lsb-release software-properties-common ripgrep
 
 # Install Cargo
 RUN curl https://sh.rustup.rs -sSf | bash -s -- -y --default-toolchain 1.87
@@ -20,8 +20,6 @@ RUN ./configure --enable-optimizations --with-ensurepip=install \
  && make -j"$(nproc)" \
  && make altinstall
 
-RUN apt update && \
-    apt install -y protobuf-compiler
 
 WORKDIR /
 RUN python3.10 -m venv crs_env && . crs_env/bin/activate
@@ -60,6 +58,7 @@ COPY ./fuzzdb/src /home/crs/fuzzdb/src
 ENV CXXSTDLIB=stdc++
 RUN cargo build --release
 RUN cargo build --tests --release
+ENV CXXSTDLIB=
 
 ################################################################################
 # Build llvm-cov-custom
@@ -101,7 +100,7 @@ RUN apt install redis-server -y
 RUN apt install pigz -y
 RUN apt install graphviz -y
 
-# Copy llvm-cov-custom
+# Copy from multilang-builder for CP build
 COPY --from=llvm-cov-custom /llvm-project/install/bin/llvm-cov /usr/local/bin/symbolizer/llvm-cov-custom
 
 # Build FuzzDB
@@ -123,8 +122,8 @@ RUN pip3 install -r /home/crs/requirements.txt
 # Copy Uniafl
 COPY --from=uniafl /home/crs/uniafl /home/crs/uniafl
 COPY --from=uniafl /root/.cargo /root/.cargo
-
 COPY bin/* /usr/local/bin/
+COPY static /home/crs/static
 WORKDIR /home/crs/
 
 ENV PATH="/usr/local/bin/symbolizer:$PATH"

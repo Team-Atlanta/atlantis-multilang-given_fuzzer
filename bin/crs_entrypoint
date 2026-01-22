@@ -26,6 +26,7 @@ export SRC_DIR="${SRC_DIR:-/src}"
 export OUT_DIR="${OUT_DIR:-/out}"
 export OUT="${OUT:-$OUT_DIR}"
 export OSS_CRS_ARTIFACTS_DIR="${OSS_CRS_ARTIFACTS_DIR:-/artifacts}"
+export SANITIZER="${SANITIZER:-address}"
 
 # =============================================================================
 # Helper functions
@@ -56,6 +57,12 @@ do_run_harness() {
     HARNESS="${1:-}"
     shift 2>/dev/null || true
 
+    # Support --harness_name flag for OSS-CRS compatibility
+    if [ "$HARNESS" = "--harness_name" ]; then
+        HARNESS="${1:-}"
+        shift 2>/dev/null || true
+    fi
+
     if [ -z "$HARNESS" ]; then
         error "No harness specified. Usage: docker run <image> <harness_name>"
     fi
@@ -80,16 +87,52 @@ do_run_harness() {
     fi
 
     export TARGET_HARNESS="$HARNESS"
+    export HARNESS_NAME="$HARNESS"
     export START_TIME="${START_TIME:-$(date +%s)}"
 
     if [ -f "$OUT_DIR/aixcc_conf.yaml" ]; then
         export AIXCC_CONFIG="$OUT_DIR/aixcc_conf.yaml"
     fi
 
+    # Write /crs.config to filter to the requested harness only
+    # (Config.load reads this JSON; target_harnesses=null means ALL harnesses)
+    echo "{\"target_harnesses\": [\"$HARNESS\"]}" > /crs.config
+    log "Config: /crs.config (target: $HARNESS)"
+
     # Create output directories
     mkdir -p "$OSS_CRS_ARTIFACTS_DIR/povs"
     mkdir -p "$OSS_CRS_ARTIFACTS_DIR/corpus"
     mkdir -p "$OSS_CRS_ARTIFACTS_DIR/crs-data"
+
+    # Symlink coverage binaries (built by builder.Dockerfile into /out/.coverage-out/)
+    if [ -d "$OUT_DIR/.coverage-out" ] && [ ! -e "/coverage-out" ]; then
+        ln -s "$OUT_DIR/.coverage-out" /coverage-out
+        log "Coverage binary: /coverage-out (via $OUT_DIR/.coverage-out)"
+    fi
+
+    # Restore source tree from builder tarball (includes project.yaml, .aixcc/, source files)
+    if [ ! -f "/src/project.yaml" ]; then
+        mkdir -p /src
+        if [ -f "$OUT_DIR/.crs-src.tar.gz" ]; then
+            tar xzf "$OUT_DIR/.crs-src.tar.gz" -C /src/ 2>/dev/null || true
+            log "Restored source tree from .crs-src.tar.gz"
+        fi
+        if [ ! -f "/src/project.yaml" ]; then
+            log "WARNING: project.yaml not found in source tarball, defaulting to language=c"
+            echo "language: c" > /src/project.yaml
+        fi
+    fi
+
+    # Handle ref.diff (OSS-CRS mounts at /ref.diff, libCRS expects /src/ref.diff)
+    if [ -f "/ref.diff" ] && [ ! -f "/src/ref.diff" ]; then
+        cp /ref.diff /src/ref.diff
+    fi
+
+    # Export for main.py compatibility
+    export POV_DIR="$OSS_CRS_ARTIFACTS_DIR/povs"
+    export CORPUS_DIR="$OSS_CRS_ARTIFACTS_DIR/corpus"
+    export CRS_DATA_DIR="$OSS_CRS_ARTIFACTS_DIR/crs-data"
+    export SEED_SHARE_DIR="${SEED_SHARE_DIR:-/seed_share_dir}"
 
     # Log mode info
     [ -f "/ref.diff" ] && log "Delta mode: /ref.diff"
@@ -98,7 +141,7 @@ do_run_harness() {
     log "Output: $OSS_CRS_ARTIFACTS_DIR"
     log "Starting fuzzing..."
 
-    # Run CRS (writes directly to /artifacts via CRSPaths)
+    # Run CRS
     main.py
 
     log "Run complete. Results:"

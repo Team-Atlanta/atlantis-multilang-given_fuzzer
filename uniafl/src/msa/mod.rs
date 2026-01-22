@@ -17,7 +17,7 @@ mod tests;
 
 use fuzzer::MsaFuzzer;
 use manager::MsaManager;
-use stage::{GivenFuzzerStage, SeedShareStage};
+use stage::{GivenFuzzerStage, LoadStage, SeedShareStage, TestStage};
 use state::UniState;
 
 #[derive(Serialize, Deserialize)]
@@ -37,13 +37,13 @@ pub fn start_fuzz_loop(config_path: &PathBuf) {
     let pov_dir = PathBuf::from(config.pov_dir);
     let msa_mgr = MsaManager::new(config_path, true);
     let state = UniState::new(config_path, &msa_mgr.harness_name, &corpus_dir, &pov_dir);
-    let mut stages = tuple_list!(
+    let stages = tuple_list!(
+        //LoadStage::new(config_path),
+        TestStage::new(config_path),
         GivenFuzzerStage::new(config_path),
+        SeedShareStage::new(config_path),
     )
     .into_vec();
-    if let Some(seed_share_stage) = SeedShareStage::new(config_path) {
-        stages.push(Box::new(seed_share_stage));
-    }
     assert!(!stages.is_empty());
     let msa_fuzzer = MsaFuzzer::new(msa_mgr, config_path, config.given_fuzzer_dir, state, stages);
 

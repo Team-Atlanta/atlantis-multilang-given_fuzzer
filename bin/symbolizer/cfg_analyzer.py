@@ -1,11 +1,13 @@
 #!/usr/bin/env python3
 
 import argparse
+import logging
 import multiprocessing
 import os
 import pickle
 import re
 import subprocess
+import traceback
 from dataclasses import dataclass
 from typing import Dict, List, Set
 from urllib.parse import urlparse
@@ -15,6 +17,11 @@ from redis import Redis
 from cfg_dataclasses import FunctionCFG, LineInfo, Node
 from llvm_symbolizer import LLVMSymbolizer
 from utils import is_running_under_pytest
+
+# Symbols that indicate SanCov instrumentation in objdump output.
+# The counter array is typically referenced relative to one of these.
+SANCOV_MARKERS = ["__TMC_END__", "__sancov_cntrs", "__start___sancov_cntrs",
+                  "__stop___sancov_cntrs"]
 
 
 @dataclass
@@ -46,10 +53,13 @@ class CFGWorker:
         data: List[FunctionCFG] = []
 
         for region in regions:
-            if "__TMC_END__" not in region:
+            if not any(marker in region for marker in SANCOV_MARKERS):
                 continue
             lines = region.split("\n")
-            function_name = re.search(r"<(.*?)>", lines[0]).group(1)
+            match = re.search(r"<(.*?)>", lines[0])
+            if not match:
+                continue
+            function_name = match.group(1)
 
             if function_name in [
                 "deregister_tm_clones",
@@ -188,7 +198,8 @@ class CFGWorker:
             instrumented_addrs=(
                 {intermediate_data[0].addr}
                 if any(
-                    "__TMC_END__" in datum.instruction for datum in intermediate_data
+                    any(marker in datum.instruction for marker in SANCOV_MARKERS)
+                    for datum in intermediate_data
                 )
                 else set()
             ),
@@ -497,6 +508,13 @@ class CFGWorker:
 
     def create_data(self) -> Dict[int, Node]:
         cfg = self.__run_objdump()
+        if not cfg:
+            logging.warning(
+                f"[cfg_analyzer] Worker {self.worker_id}: objdump produced no "
+                f"instrumented functions for {self.harness} "
+                f"(markers: {SANCOV_MARKERS})"
+            )
+            return {}
         if is_running_under_pytest():
             self.__verify_cfg(cfg)
 
@@ -576,19 +594,31 @@ class CFGAnalyzer:
 
             for d in data:
                 self.data.update(d)
-        except Exception:
-            pass
+        except Exception as e:
+            logging.error(f"[cfg_analyzer] Failed to create data for {self.harness}: {e}")
+            logging.error(traceback.format_exc())
 
     def save_to_redis(self) -> None:
         parsed_url = urlparse(self.redis_url)
         redis_client = Redis(host=parsed_url.scheme, port=parsed_url.path)
 
         redis_key = f"{self.harness}"
+        logging.info(
+            f"[cfg_analyzer] Storing {len(self.data)} entries in Redis "
+            f"(key={redis_key}, host={parsed_url.scheme}, port={parsed_url.path})"
+        )
+        if not self.data:
+            logging.warning(
+                f"[cfg_analyzer] WARNING: Storing EMPTY data for {self.harness}. "
+                "Coverage symbolization will produce empty results."
+            )
         serialized_data = pickle.dumps(self.data)
         redis_client.set(redis_key, serialized_data)
 
 
 if __name__ == "__main__":
+    logging.basicConfig(level=logging.INFO)
+
     parser = argparse.ArgumentParser(description="Arguments for cfg analyzer")
 
     parser.add_argument(
@@ -607,6 +637,11 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
+    logging.info(
+        f"[cfg_analyzer] harness={args.harness} "
+        f"llvm_symbolizer={args.llvm_symbolizer} "
+        f"redis_url={args.redis_url} ncpu={args.ncpu}"
+    )
     cfg_analyzer = CFGAnalyzer(
         args.harness, args.llvm_symbolizer, args.redis_url, args.ncpu
     )

@@ -1,0 +1,78 @@
+#!/bin/bash
+# =============================================================================
+# CRS-multilang Compile Wrapper
+# =============================================================================
+# Builds the target harness twice from clean source:
+#   1. SANITIZER=address → /out/  (fuzzing binary with ASAN)
+#   2. SANITIZER=coverage → /out/.coverage-out/  (coverage-instrumented binary)
+#
+# Uses rsync to snapshot/restore source between builds, ensuring each build
+# starts from a clean state (no cross-contamination from build artifacts).
+#
+# Coverage binaries are stored inside /out/ so they travel with the build
+# output when the OSS-CRS framework copies /out/ to the runner container.
+# The runner's crs_entrypoint symlinks /coverage-out → /out/.coverage-out/.
+#
+# If the coverage build fails, fuzzing still works with addr2line fallback.
+# =============================================================================
+
+set -e
+
+log() {
+    echo "[compile_crs] $*"
+}
+
+# Save original values
+ORIG_SANITIZER="${SANITIZER:-address}"
+ORIG_OUT="${OUT:-/out}"
+SRC_DIR="${SRC:-/src}"
+SNAPSHOT_DIR="/tmp/.crs-src-snapshot"
+
+# Snapshot source tree before first build (for clean coverage build)
+log "Saving source snapshot via rsync"
+mkdir -p "${SNAPSHOT_DIR}"
+rsync -a "${SRC_DIR}/" "${SNAPSHOT_DIR}/"
+
+# =============================================================================
+# Build 1: Fuzzing binary (with sanitizer)
+# =============================================================================
+log "Building fuzzing binary (SANITIZER=${ORIG_SANITIZER}, OUT=${ORIG_OUT})"
+export SANITIZER="${ORIG_SANITIZER}"
+export OUT="${ORIG_OUT}"
+compile
+
+# =============================================================================
+# Package source tree (needed by runner for language detection, coverage, etc.)
+# =============================================================================
+# Create from pre-build snapshot (excludes .git and build artifacts for size)
+log "Creating source tarball for runner"
+tar czf "${ORIG_OUT}/.crs-src.tar.gz" \
+    --exclude='.git' --exclude='build' --exclude='_build' \
+    --exclude='*.o' --exclude='*.a' --exclude='*.so' \
+    --exclude='*.pyc' --exclude='__pycache__' \
+    -C "${SNAPSHOT_DIR}" . 2>/dev/null || true
+
+# =============================================================================
+# Build 2: Coverage binary (stored inside /out/ for portability)
+# =============================================================================
+# Restore source tree to pre-build state so project build scripts run cleanly
+log "Restoring clean source via rsync"
+rm -rf ${WORK:-/work}/*
+rsync -a --delete "${SNAPSHOT_DIR}/" "${SRC_DIR}/"
+rm -rf "${SNAPSHOT_DIR}"
+cd "${SRC_DIR}"
+
+COVERAGE_OUT="${ORIG_OUT}/.coverage-out"
+log "Building coverage binary (SANITIZER=coverage, OUT=${COVERAGE_OUT})"
+mkdir -p "${COVERAGE_OUT}"
+export SANITIZER="coverage"
+export OUT="${COVERAGE_OUT}"
+
+# Coverage build is best-effort; fuzzing works without it via addr2line fallback
+if compile; then
+    log "Coverage build succeeded: ${COVERAGE_OUT}"
+else
+    log "Warning: Coverage build failed (fuzzing will use addr2line fallback)"
+fi
+
+log "Build complete"

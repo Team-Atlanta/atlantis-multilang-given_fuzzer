@@ -96,9 +96,6 @@ if [[ $FUZZING_ENGINE != "none" ]] && [[ $FUZZING_LANGUAGE != "jvm" ]] && [[ "${
   . compile_${FUZZING_ENGINE}
 fi
 
-if [[ $FUZZING_ENGINE == "none" ]] && [[ $COMPILE_SYMCC == "1" ]]; then
-  . compile_symcc
-fi
 
 if [[ $SANITIZER_FLAGS = *sanitize=memory* ]]
 then

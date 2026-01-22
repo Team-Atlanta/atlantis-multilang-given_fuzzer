@@ -18,11 +18,11 @@ ARG IMG_TAG=latest
 FROM ghcr.io/aixcc-finals/base-builder:${IMG_TAG}
 
 # Set up Golang environment variables (copied from /root/.bash_profile).
-ENV GOPATH=/root/go
+ENV GOPATH /root/go
 
 # /root/.go/bin is for the standard Go binaries (i.e. go, gofmt, etc).
 # $GOPATH/bin is for the binaries from the dependencies installed via "go get".
-ENV PATH=$PATH:/root/.go/bin:$GOPATH/bin
+ENV PATH $PATH:/root/.go/bin:$GOPATH/bin
 
 COPY gosigfuzz.c $GOPATH/gosigfuzz/
 

@@ -17,12 +17,12 @@
 ARG IMG_TAG=latest
 FROM ghcr.io/aixcc-finals/base-builder:${IMG_TAG} AS base
 
-ENV JAVA_HOME=/usr/lib/jvm/java-17-openjdk-amd64
-ENV JAVA_15_HOME=/usr/lib/jvm/java-15-openjdk-amd64
-ENV JVM_LD_LIBRARY_PATH=$JAVA_HOME/lib/server
-ENV PATH=$PATH:$JAVA_HOME/bin
-ENV JAZZER_API_PATH="/usr/local/lib/jazzer_api_deploy.jar"
-ENV JAZZER_JUNIT_PATH="/usr/local/bin/jazzer_junit.jar"
+ENV JAVA_HOME /usr/lib/jvm/java-17-openjdk-amd64
+ENV JAVA_15_HOME /usr/lib/jvm/java-15-openjdk-amd64
+ENV JVM_LD_LIBRARY_PATH $JAVA_HOME/lib/server
+ENV PATH $PATH:$JAVA_HOME/bin
+ENV JAZZER_API_PATH "/usr/local/lib/jazzer_api_deploy.jar"
+ENV JAZZER_JUNIT_PATH "/usr/local/bin/jazzer_junit.jar"
 
 RUN install_java.sh
 

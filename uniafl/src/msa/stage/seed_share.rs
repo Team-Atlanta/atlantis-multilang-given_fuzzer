@@ -14,7 +14,7 @@ use super::{
 use crate::{
     common::utils,
     executor::Executor,
-    input_gen::client::InputGenClient,
+    input_gen::client,
     msa::{manager::MsaManager, stage::MsaStage, state::UniState},
 };
 
@@ -31,7 +31,7 @@ pub struct SeedShareStage {
 impl SeedShareStage {
     pub fn new(config_path: &PathBuf) -> Option<Self> {
         let name = "share";
-        if InputGenClient::is_on_config(&name.to_string(), config_path, true) {
+        if client::is_on_config(&name.to_string(), config_path, true) {
             let config = utils::load_json::<SeedShareConf>(config_path)
                 .unwrap_or_else(|e| panic!("Error in load_json: {}", e));
             let blob_dir = PathBuf::from(&config.given_corpus_dir);

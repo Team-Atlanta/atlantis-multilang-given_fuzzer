@@ -3,6 +3,9 @@ from libCRS import Config, CP, CRS, Module, HarnessRunner, util
 from helper import set_up_cp
 
 
+def check_vapi_result():
+    return util.run_cmd(["python3", "-m", "libCRS.submit", "check"])
+
 def get_submit_result():
     ret = util.run_cmd(["python3", "-m", "libCRS.submit", "show"])
     return ret.stdout.decode("utf-8")
@@ -47,10 +50,12 @@ class SampleCRS(CRS):
         await self.async_prepare_modules()
 
 def test_crs(shared_cp_root, shared_crs_scratch_space, sample_cp_info, tmp_path):
-    conf = Config()
+    conf = Config(0, 1)
     cp = set_up_cp(shared_cp_root, sample_cp_info)
     crs = SampleCRS(sample_cp_info.name, "SampleCRS", SampleHR, conf, tmp_path)
     crs.run()
+
+    assert check_vapi_result().returncode == 0
 
     result = get_submit_result()
     print(result)

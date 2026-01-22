@@ -4,7 +4,7 @@ use std::{borrow::Cow, path::PathBuf, sync::Arc};
 
 use crate::{
     executor::Executor,
-    input_gen::client::InputGenClient,
+    input_gen::client,
     msa::{
         manager::{ExecMode, MsaManager},
         stage::MsaStage,
@@ -18,7 +18,7 @@ pub struct GivenFuzzerStage {
 impl GivenFuzzerStage {
     pub fn new(config_path: &PathBuf) -> Option<Self> {
         let name = Cow::Borrowed("given_fuzzer");
-        if InputGenClient::is_on_config(&name.to_string(), config_path, true) {
+        if client::is_on_config(&name.to_string(), config_path, true) {
             Some(Self { name })
         } else {
             None

@@ -82,11 +82,11 @@ ENV FUZZER_ARGS="-rss_limit_mb=2560 -timeout=25"
 ENV AFL_FUZZER_ARGS="-m none"
 
 # Set up Golang environment variables (copied from /root/.bash_profile).
-ENV GOPATH=/root/go
+ENV GOPATH /root/go
 
 # /root/.go/bin is for the standard Go binaries (i.e. go, gofmt, etc).
 # $GOPATH/bin is for the binaries from the dependencies installed via "go get".
-ENV PATH=$PATH:$GOPATH/bin
+ENV PATH $PATH:$GOPATH/bin
 COPY gocoverage $GOPATH/gocoverage
 
 COPY install_go.sh /

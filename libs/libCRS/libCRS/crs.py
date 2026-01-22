@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import asyncio
+import json
 import logging
 import os
 from pathlib import Path
@@ -20,6 +21,24 @@ from .util import (
 __all__ = ["CRS", "HarnessRunner"]
 
 
+async def async_get_llm_spend(interval=10, N=3, timeout=10):
+    llm_url = os.environ.get("AIXCC_LITELLM_HOSTNAME")
+    llm_key = os.environ.get("LITELLM_KEY")
+    if llm_url is None or llm_key is None:
+        return 0
+    cmd = ["curl", f"{llm_url}/key/info?key={llm_key}", "-X", "GET"]
+    cmd += ["-H", f"Authorization: Bearer {llm_key}"]
+    for i in range(N):
+        ret = await async_run_cmd(cmd, timeout=timeout)
+        try:
+            ret = json.loads(ret.stdout.decode("utf-8", errors="ignore"))
+            return ret["info"]["spend"]
+        except Exception:
+            await asyncio.sleep(interval)
+    logging.info("Fail to get llm spend..")
+    return 0
+
+
 class CRS(ABC):
     def __init__(
         self,
@@ -35,10 +54,12 @@ class CRS(ABC):
         self.cp = cp
         if workdir is None:
             workdir = Path(os.environ.get("CRS_WORKDIR", "/crs-workdir/"))
-        self.workdir = workdir / "worker-0"
+        self.workdir = workdir / f"worker-{config.node_idx}"
         set_env("CRS_WORKDIR", str(self.workdir))
         set_env("TARGET_CP", str(self.cp.name))
         set_env("START_TIME", str(int(time.time())))
+        set_env("CP_PROJ_PATH", str(cp.proj_path))
+        set_env("CP_SRC_PATH", str(cp.cp_src_path))
 
         self.target_harnesses = []
         for harness in self.cp.harnesses.values():
@@ -56,18 +77,17 @@ class CRS(ABC):
             if m.is_on():
                 m._init()
 
+        self.commit_hints: Path | None = None
+        self.llm_lock: asyncio.Semaphore | None = None
+        self.llm_init_spend: int = asyncio.run(async_get_llm_spend())
         self.__async_named_locks = AsyncNamedLocks()
         self.hrunners = []
 
-        # Per-harness saturation tracking
-        self.harness_tasks = {}        # {harness_name: asyncio.Task}
-        self.harness_states = {}       # {harness_name: state_dict with subprocess, status, etc}
-
     def log(self, msg: str):
-        logging.info(f"[{self.name}] {msg}")
+        logging.info(f"[{self.name}-{self.config.node_idx}] {msg}")
 
     def error(self, msg: str):
-        logging.error(f"[{self.name}] {msg}")
+        logging.error(f"[{self.name}-{self.config.node_idx}] {msg}")
         exit(-1)
 
     def __check_config(self):
@@ -76,6 +96,10 @@ class CRS(ABC):
         self.log(f"Target CP: {self.cp.name}")
         self.log(f"Test Mode: {self.config.test}")
         self.log(f"# of cores: {self.config.ncpu}")
+        self.log(f"# of llm_lock: {self.config.n_llm_lock}")
+        self.log(f"llm_limit: {self.config.llm_limit}")
+        self.log(f"node_cnt: {self.config.node_cnt}")
+        self.log(f"node_idx: {self.config.node_idx}")
         self.log(
             f"Target Harness: {list(map(lambda x: x.name, self.target_harnesses))}"
         )
@@ -92,6 +116,14 @@ class CRS(ABC):
     async def async_get_lock(self, name: str):
         return await self.__async_named_locks.async_get_lock(name)
 
+    async def async_llm_total_spend(self):
+        spend = await async_get_llm_spend()
+        return spend - self.llm_init_spend
+
+    async def async_in_llm_limit(self):
+        spend = await self.async_llm_total_spend()
+        return spend < self.config.llm_limit
+
     def get_workdir(self, name: str) -> Path:
         workdir = self.workdir / name
         os.makedirs(workdir, exist_ok=True)
@@ -101,6 +133,9 @@ class CRS(ABC):
         dst = self.workdir / src.name
         await async_cp(src, dst)
         return dst
+
+    def set_commit_hints(self, commit_hints: Path):
+        self.commit_hints = commit_hints
 
     def is_submitted(self, harness: CP_Harness, pov_path: Path):
         if not pov_path.exists():
@@ -141,6 +176,12 @@ class CRS(ABC):
             self.async_submit_pov(harness, pov_path, sanitizer_output_hash, finder)
         )
 
+    async def async_precompile(self):
+        cmd = ["python3", "-m", "libCRS.submit", "precompile"]
+        if self.commit_hints:
+            cmd += ["--commit-hints-file", self.commit_hints]
+        await async_run_cmd(cmd, timeout=60)
+
     async def async_wait_prepared(self):
         while not self.prepared:
             await asyncio.sleep(1)
@@ -171,21 +212,8 @@ class CRS(ABC):
             core_id += hrunner.ncpu
 
     async def async_run(self):
-        # Suppress "Future exception was never retrieved" warnings during shutdown
-        def handle_exception(loop, context):
-            if "exception" in context:
-                exc = context["exception"]
-                if isinstance(exc, asyncio.CancelledError):
-                    return  # Ignore CancelledError during shutdown
-            # Log other exceptions
-            logging.error(f"Unhandled exception in event loop: {context.get('message', 'Unknown')}")
-
-        asyncio.get_event_loop().set_exception_handler(handle_exception)
-
-        # Phase 1: Prepare (separate from harness tasks)
-        await self.__async_prepare()
-
-        # Phase 2: Create harness runners
+        self.llm_lock = asyncio.Semaphore(self.config.n_llm_lock)
+        jobs = [self.__async_prepare()]
         hrunners = []
         for harness in self.cp.harnesses.values():
             if not self.config.is_target_harness(harness):
@@ -193,36 +221,14 @@ class CRS(ABC):
             hrunners.append(self.hrunner_class(harness, self))
         self.hrunners = hrunners
         self.alloc_cpu(hrunners)
-
-        # Phase 3: Launch harness tasks individually with tracking
         for hrunner in hrunners:
-            task = asyncio.create_task(hrunner.async_run())
-            self.harness_tasks[hrunner.harness.name] = task
-            self.harness_states[hrunner.harness.name] = {
-                'task': task,
-                'subprocess': None,  # Will be set by UniAFL._async_run
-                'last_seed_time': time.time(),
-                'status': 'running',
-                'seed_count': 0,
-                'start_time': time.time()
-            }
-
-        # Phase 4: Launch watchdog
+            jobs.append(hrunner.async_run())
         watchdog = asyncio.create_task(self._async_watchdog())
-
-        # Phase 5: Wait for all harness tasks
         try:
-            await asyncio.gather(*self.harness_tasks.values(), return_exceptions=True)
+            await asyncio.gather(*jobs)
+            watchdog.cancel()
         except asyncio.CancelledError:
-            pass  # Expected when _async_terminate_gracefully cancels all tasks
-        finally:
-            # Cleanup watchdog
-            if not watchdog.done():
-                watchdog.cancel()
-                try:
-                    await watchdog
-                except asyncio.CancelledError:
-                    pass
+            pass
 
     def run(self):
         if os.environ.get("RUN_SHELL") != None:

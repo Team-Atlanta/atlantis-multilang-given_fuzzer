@@ -25,7 +25,7 @@ ENV FUZZINTRO_OUTDIR=$SRC
 
 # Install newer cmake.
 # Many projects, as well as recent clang versions, need a newer cmake.
-ENV CMAKE_VERSION=3.29.2
+ENV CMAKE_VERSION 3.29.2
 RUN apt-get update && apt-get install -y wget sudo && \
     wget -q https://github.com/Kitware/CMake/releases/download/v$CMAKE_VERSION/cmake-$CMAKE_VERSION-Linux-$arch.sh && \
     chmod +x cmake-$CMAKE_VERSION-Linux-$arch.sh && \
@@ -50,9 +50,9 @@ RUN /root/checkout_build_install_llvm.sh
 RUN rm /root/checkout_build_install_llvm.sh
 
 # Setup the environment.
-ENV CC="clang"
-ENV CXX="clang++"
-ENV CCC="clang++"
+ENV CC "clang"
+ENV CXX "clang++"
+ENV CCC "clang++"
 
 # FUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION is described at
 # https://llvm.org/docs/LibFuzzer.html#fuzzer-friendly-build-mode
@@ -64,7 +64,7 @@ ENV CCC="clang++"
 # incompatible-function-pointer-types, enum-constexpr-conversion,
 # vla-cxx-extension
 
-ENV CFLAGS="-O1 \
+ENV CFLAGS -O1 \
   -fno-omit-frame-pointer \
   -gline-tables-only \
   -Wno-error=enum-constexpr-conversion \
@@ -74,6 +74,6 @@ ENV CFLAGS="-O1 \
   -Wno-error=implicit-function-declaration \
   -Wno-error=implicit-int \
   -Wno-error=vla-cxx-extension \
-  -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION"
-ENV CXXFLAGS_EXTRA="-stdlib=libc++"
-ENV CXXFLAGS="$CFLAGS $CXXFLAGS_EXTRA"
+  -DFUZZING_BUILD_MODE_UNSAFE_FOR_PRODUCTION
+ENV CXXFLAGS_EXTRA "-stdlib=libc++"
+ENV CXXFLAGS "$CFLAGS $CXXFLAGS_EXTRA"

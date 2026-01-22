@@ -6,7 +6,6 @@ DIR=$(dirname $0)
 #docker build -t ghcr.io/aixcc-finals/base-image "$@" $DIR/base-image
 cp $DIR/../../../../uniafl/src/msa/manager/manager.c $DIR/multilang-clang/manager.cpp
 cp $DIR/../../../../uniafl/src/msa/manager/manager.h $DIR/multilang-clang/manager.h
-# Symcc prebuild removed - concolic execution disabled
 docker build -t multilang-clang "$@" $DIR/multilang-clang || exit -1
 docker build -t multilang-builder "$@" -f $DIR/base-builder/Dockerfile.multilang $DIR/base-builder || exit -1
 docker build -t multilang-builder-jvm "$@" -f $DIR/base-builder-jvm/Dockerfile.multilang $DIR/base-builder-jvm || exit -1

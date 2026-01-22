@@ -17,7 +17,7 @@ use walkdir::WalkDir;
 
 use super::exec_runner::ExecRunner;
 use crate::{
-    common::{challenge::sha1hash, utils},
+    common::utils,
     msa::{
         manager::{CovAddr, ExecMode, MsaInput, MsaManager},
         state::UniState,
@@ -637,17 +637,7 @@ impl Executor {
                 if let Some(log) = msa_input.get_crash_log() {
                     msa_input.set_crash_log(&Self::filter_address_in_jazzer_log(log.to_vec()));
                 } else if is_timeout {
-                    // Use coverage hash for timeout deduplication instead of merging all timeouts
-                    let cov = msa_input.get_cov();
-                    let cov_bytes: &[u8] = unsafe {
-                        std::slice::from_raw_parts(
-                            cov.as_ptr() as *const u8,
-                            cov.len() * std::mem::size_of::<CovAddr>(),
-                        )
-                    };
-                    let cov_hash = sha1hash(cov_bytes);
-                    let timeout_log = format!("TIMEOUT_COV_HASH:{}", cov_hash);
-                    msa_input.set_crash_log(timeout_log.as_bytes());
+                    msa_input.set_crash_log(DEFAULT_TIMEOUT_LOG);
                 } else {
                     msa_input.set_crash_log(EMPTY_CRASH_CALLSTACK);
                 }

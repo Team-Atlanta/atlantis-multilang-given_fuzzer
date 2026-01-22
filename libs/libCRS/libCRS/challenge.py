@@ -1,5 +1,7 @@
 import os
+import glob
 import logging
+import yaml
 import json
 import base64
 import asyncio
@@ -13,10 +15,11 @@ UNIAFL_BIN = Path("/home/crs/uniafl/target/release/uniafl")
 
 
 class CP_Harness:
-    def __init__(self, cp: "CP", name: str, bin_path: Path):
+    def __init__(self, cp: "CP", name: str, bin_path: Path, src_path: Path):
         self.cp = cp
         self.name = name
         self.bin_path = bin_path
+        self.src_path = src_path
         self.runner = None
         self._loop = None
 
@@ -31,6 +34,14 @@ class CP_Harness:
         if dic.exists():
             return dic
         return None
+
+    def get_answer_povs(self) -> list[Path]:
+        pov_dir = self.cp.aixcc_path / "povs"
+        return list(map(Path, glob.glob(f"{pov_dir / self.name}/*")))
+
+    def get_answer_seeds(self) -> list[Path]:
+        seed_dir = self.cp.aixcc_path / "seeds"
+        return list(map(Path, glob.glob(f"{seed_dir / self.name}/*")))
 
     def run_input(
         self, file_path, worker_idx="0"
@@ -101,33 +112,61 @@ class CP_Harness:
 
 
 class CP:
-    def __init__(self, name: str, built_path: str | None):
-        from .paths import CRSPaths
-
+    def __init__(
+        self, name: str, proj_path: str, cp_src_path: str, built_path: str | None
+    ):
         self.name = name
-        self.built_path = Path(str(built_path)) if built_path else None
-        # Use centralized path resolution for diff file
-        self.diff_path = CRSPaths.get_diff_path()
-        # Get language from FUZZING_LANGUAGE env var (default: "c")
-        self.language = os.environ.get("FUZZING_LANGUAGE", "c")
+        self.proj_path = Path(str(proj_path))
+        self.aixcc_path = self.proj_path / ".aixcc"
+        diff_path = self.proj_path / "ref.diff"
+        if diff_path.exists():
+            self.diff_path = diff_path
+        else:
+            self.diff_path = None
+        self.cp_src_path = Path(str(cp_src_path))
+        self.built_path = None
+        if built_path:
+            self.built_path = Path(str(built_path))
+
+        with open(self.proj_path / "project.yaml", "r") as f:
+            info = yaml.safe_load(f)
+            self.language = info["language"]
 
         self.harnesses = self.get_harnesses()
 
     def get_harnesses(self) -> dict[str, CP_Harness]:
-        """Get harnesses from OSS-Fuzz output directory"""
         harnesses = {}
-        for name in get_harness_names(self.built_path):
-            bin_path = self.built_path / name if self.built_path else None
-            harnesses[name] = CP_Harness(self, name, bin_path)
+        config = self.aixcc_path / "config.yaml"
+        if not config.exists():
+            for name in get_harness_names(self.built_path):
+                bin_path = None
+                if self.built_path:
+                    bin_path = self.built_path / name
+                harnesses[name] = CP_Harness(self, name, bin_path, None)
+            return harnesses
+        with open(self.aixcc_path / "config.yaml", "r") as f:
+            aixcc_conf = yaml.safe_load(f)
+            for name, src_path in self.get_harness_srcs(aixcc_conf).items():
+                bin_path = None
+                if self.built_path:
+                    bin_path = self.built_path / name
+                harnesses[name] = CP_Harness(self, name, bin_path, src_path)
         return harnesses
+
+    def get_harness_srcs(self, aixcc_conf) -> dict[str, Path]:
+        ret = {}
+        cp_src = str(self.cp_src_path)
+        cp_proj_path = str(self.proj_path)
+        for item in aixcc_conf["harness_files"]:
+            src = (
+                item["path"].replace("$PROJECT", cp_proj_path).replace("$REPO", cp_src)
+            )
+            ret[item["name"]] = Path(src)
+        return ret
 
     def log(self, msg: str):
         logging.info(f"[CP] {msg}")
 
 
 def init_cp_in_runner() -> CP:
-    from .paths import CRSPaths
-    return CP(
-        os.environ.get("CRS_TARGET"),
-        str(CRSPaths.OUT_DIR)
-    )
+    return CP(os.environ.get("CRS_TARGET"), "/src/", "/src/repo", "/out")

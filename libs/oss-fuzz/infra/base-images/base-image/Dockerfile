@@ -20,7 +20,7 @@ ARG parent_image=ubuntu:20.04@sha256:4a45212e9518f35983a976eead0de5eecc555a2f047
 
 FROM $parent_image
 
-ENV DEBIAN_FRONTEND=noninteractive
+ENV DEBIAN_FRONTEND noninteractive
 # Install tzadata to match ClusterFuzz
 # (https://github.com/google/oss-fuzz/issues/9280).
 

@@ -3,7 +3,7 @@ use std::sync::Arc;
 
 use super::{
     manager::MsaManager,
-    stage::{InputGenStage, LoadStage, MsaStage, MsaStagesTuple},
+    stage::{LoadStage, MsaStage, MsaStagesTuple},
     state::UniState,
 };
 use crate::executor::Executor;
@@ -75,13 +75,7 @@ impl<ST: MsaStagesTuple> MsaFuzzer<ST> {
             &self.state,
             worker_idx,
             &mut executor,
-            |stage| {
-                InputGenStage::stage_filter(
-                    self.msa_mgr.worker_cnt,
-                    worker_idx as u32,
-                    stage.name(),
-                )
-            },
+            |_stage| true,
         );
     }
 

@@ -7,11 +7,16 @@ import logging
 import os
 import shlex
 import sys
+import time
 from pathlib import Path
 
-from libCRS import CRS, Config, CRSPaths, HarnessRunner, Module, init_cp_in_runner, util
-from libCRS.challenge import CP_Harness
+import yaml
+from libCRS import CRS, Config, HarnessRunner, Module, init_cp_in_runner, util
 from libCRS.util import TestResult
+from redis import Redis
+
+sys.path.insert(0, "/usr/local/bin/symbolizer")
+from llvm_symbolizer import LLVMSymbolizer
 
 
 def dict_to_json(data):
@@ -73,7 +78,7 @@ class FuzzerOpt:
 class UniAFL(Module):
     BASE = Path("/home/crs/uniafl/")
     BIN = BASE / "target/release/uniafl"
-    DIFF_PATH = CRSPaths.get_diff_path()
+    DIFF_PATH = Path("/src/ref.diff")
 
     def _init(self) -> None:
         self.redis_url = {}
@@ -118,11 +123,13 @@ class UniAFL(Module):
         fuzzer_opt = await self.__async_get_fuzzer_opt(harness.name)
         max_len = fuzzer_opt.get_max_len()
         config = {
+            "project_src_dir": self.crs.cp.cp_src_path,
+            "harness_src_path": harness.src_path,
             "given_fuzzer_dir": self.crs.cp.built_path,
             "corpus_dir": dummy_dir / "uniafl_corpus",
             "cov_dir": dummy_dir / "uniafl_cov",
             "given_corpus_dir": dummy_dir / "others_corpus",
-            "pov_dir": dummy_dir / "pov",
+            "pov_dir": Path(os.environ.get("POV_DIR", "/artifacts/povs")),
             "workdir": dummy_dir / "workdir",
             "language": self.crs.cp.language,
             "redis_url": self.run_redis(harness),
@@ -154,6 +161,9 @@ class UniAFL(Module):
             env["JAZZER_MAX_NUM_COUNTERS"] = str(128 << 20)
             await util.async_run_cmd(cmd, env=env)
         elif self.crs.cp.language in ["c", "cpp", "c++", "rust", "go"]:
+            if os.environ.get("CREATE_CONF") != None:
+                self.log("Skip because create_conf_mod")
+                return
             redis_url = self.redis_url[harness.name]
             cmd = f"cfg_analyzer.py"
             cmd += f" --harness {harness.bin_path}"
@@ -209,10 +219,6 @@ class UniAFL(Module):
             hrunner.get_workdir(f"{self.name}/seed_share_workdir"),
             "--share-dir",
             share_dir,
-            "--our-src-dir",
-            hrunner.uniafl_corpus_dir,
-            "--our-cov-dir",
-            hrunner.uniafl_cov_dir,
             "--our-dst-dir",
             hrunner.others_corpus_dir,
             "--interval",
@@ -250,11 +256,6 @@ class UniAFL(Module):
             stdout=asyncio.subprocess.PIPE,
             stderr=asyncio.subprocess.PIPE,
         )
-
-        # Store subprocess handle in CRS state for per-harness shutdown
-        harness_name = hrunner.harness.name
-        if harness_name in self.crs.harness_states:
-            self.crs.harness_states[harness_name]['subprocess'] = proc
 
         # Launch support tasks
         watchdog = asyncio.create_task(self._async_run_watchdog(hrunner))
@@ -340,6 +341,7 @@ class UniAFL(Module):
         )
         return ret
 
+
     async def __prepare_test_config(self, hrunner, more={}):
         config = {}
         workdir = hrunner.get_workdir(self.name) / "test"
@@ -361,8 +363,10 @@ class UniAFL(Module):
         fuzzer_opt = await self.__async_get_fuzzer_opt(hrunner.harness.name)
         max_len = fuzzer_opt.get_max_len()
         config = {
+            "project_src_dir": self.crs.cp.cp_src_path,
             "harness_name": hrunner.harness.name,
             "harness_path": hrunner.harness.bin_path,
+            "harness_src_path": hrunner.harness.src_path,
             "given_fuzzer_dir": self.crs.cp.built_path,
             "corpus_dir": hrunner.uniafl_corpus_dir,
             "cov_dir": hrunner.uniafl_cov_dir,
@@ -376,9 +380,9 @@ class UniAFL(Module):
             "max_len": max_len,
             "allow_timeout_bug": fuzzer_opt.is_timeout_bug_allowed(),
         }
-        if UniAFL.DIFF_PATH is not None and UniAFL.DIFF_PATH.exists():
+        if UniAFL.DIFF_PATH.exists():
             config["diff_path"] = str(UniAFL.DIFF_PATH)
-            process_diff_path = UniAFL.DIFF_PATH.with_suffix(".diff.json")
+            process_diff_path = Path("/src/ref.diff.json")
             await util.async_run_cmd(
                 ["extract_from_diff.py", UniAFL.DIFF_PATH, process_diff_path]
             )
@@ -410,16 +414,15 @@ class UniAFL(Module):
 
 class AnyHR(HarnessRunner):
     async def async_run(self):
-        if os.environ.get("COV_RUNNER", False):
-            return await self._async_run_cov_runner()
-        # Use CRSPaths for direct output to /artifacts
-        self.uniafl_corpus_dir = CRSPaths.get_corpus_dir() / self.harness.name
-        self.uniafl_cov_dir = CRSPaths.get_crs_data_dir() / "coverage" / self.harness.name
-        self.pov_dir = CRSPaths.get_pov_dir() / self.harness.name
-        # Create directories
-        os.makedirs(self.uniafl_corpus_dir, exist_ok=True)
-        os.makedirs(self.uniafl_cov_dir, exist_ok=True)
-        os.makedirs(self.pov_dir, exist_ok=True)
+        # OSS-CRS output paths
+        self.pov_dir = Path(os.environ.get("POV_DIR", "/artifacts/povs"))
+        os.makedirs(str(self.pov_dir), exist_ok=True)
+        corpus_base = Path(os.environ.get("CORPUS_DIR", "/artifacts/corpus"))
+        os.makedirs(str(corpus_base), exist_ok=True)
+        self.uniafl_corpus_dir = corpus_base
+        crs_data_dir = Path(os.environ.get("CRS_DATA_DIR", "/artifacts/crs-data"))
+        self.uniafl_cov_dir = crs_data_dir / "coverage"
+        os.makedirs(str(self.uniafl_cov_dir), exist_ok=True)
         self.uniafl_config_path = None
         self.others_corpus_dir = self.get_workdir("others_corpus")
         await self.__unzip_given_corpus(self.others_corpus_dir)
@@ -427,20 +430,16 @@ class AnyHR(HarnessRunner):
         self.ms_per_exec = await self.__async_get_ms_per_exec()
         await self.crs.uniafl.async_run(self)
 
-    async def _async_run_cov_runner(self):
-        self.log("Run cov-runner")
-        share_dir = get_seed_share_dir()
-        cmd = ["cov_runner", share_dir, self.harness.name]
-        while True:
-            self.log(await util.async_run_cmd(cmd))
-
     async def __copy_corpus_from_other_cp(self, dst):
+        """OSS-CRS: load initial seeds from all /seed_share_dir/*/ directories"""
         seed_share_dir = Path(get_seed_share_dir())
-        seed_share_dir_name = seed_share_dir.name
-        rootdir = seed_share_dir.parent.parent
-        candidates = list(
-            rootdir.glob(f"*/{seed_share_dir_name}/crs-multilang/{self.harness.name}")
-        )
+        if not seed_share_dir.exists():
+            return
+        crs_name = os.environ.get("CRS_NAME", "atlantis-multilang-given_fuzzer")
+        candidates = [
+            d for d in seed_share_dir.iterdir()
+            if d.is_dir() and d.name != crs_name
+        ]
         if len(candidates) == 0:
             self.log(f"No reusable corpus found for {self.harness.name}")
             return
@@ -508,16 +507,25 @@ class AnyCRS(CRS):
         await self.async_prepare_modules()
 
     async def _async_watchdog(self):
-        """
-        Continuous mode watchdog - runs indefinitely until manual stop.
-        """
-        self.log("[Watchdog] Continuous mode: Running indefinitely")
-        # Just wait forever - fuzzing continues until manual stop
+        """Run indefinitely - outer framework handles termination."""
         while True:
             await asyncio.sleep(3600)
 
 
 ################################################################################
+
+
+def wait_redis(redis_url):
+    r = Redis(redis_url)
+    while True:
+        try:
+            if r.ping():
+                break
+            time.sleep(1)
+        except:
+            pass
+
+
 def handle_no_fdp(conf, cp):
     if "no_FDP" in conf.others:
         if conf.target_harnesses:
@@ -526,6 +534,117 @@ def handle_no_fdp(conf, cp):
             targets = cp.get_harnesses().keys()
         targets = list(filter(lambda x: not x.endswith("FDP"), targets))
         conf.target_harnesses = targets
+
+
+def name_filter(target, names):
+    return True
+
+
+def create_conf(cp, conf_path, answer_path_if_exist):
+    dummy = Path("/tmp/dummy_for_conf")
+    dummy.write_text("\n")
+    KEY = "fuzzerTestOneInput"
+    if cp.language == "jvm":
+        KEY = "fuzzerTestOneInput"
+    else:
+        KEY = "LLVMFuzzerTestOneInput"
+
+    def normalize_src(src):
+        for prefix, key in [("/src/repo", "$REPO"), ("/src", "$PROJECT")]:
+            if src.startswith(prefix):
+                return key + src[len(prefix) :]
+        return src
+
+    conf = {}
+
+    async def get_key_addr(harness):
+        cmd = f"nm {harness.bin_path} | grep LLVMFuzzerTestOneInput"
+        ret = await util.async_run_cmd(["/bin/bash", "-c", cmd])
+        try:
+            return int(ret.stdout.decode("utf-8").split(" ")[0], 16)
+        except:
+            return None
+
+    async def llvm_symbolzer_based(name, harness):
+        harness.cp.log("try llvm_symbolzer_based")
+        key_addr = await get_key_addr(harness)
+        if key_addr == None:
+            return
+        symbolizer = LLVMSymbolizer(str(harness.bin_path), "/out/llvm-symbolizer")
+        ret = symbolizer.run_llvm_symbolizer_addr(key_addr)
+        conf[name] = normalize_src(ret.src_file)
+
+    async def get_dummy_cov(harness, idx):
+        dummy_seed = Path(f"/tmp/dummy_for_conf_{idx}")
+        dummy_seed.write_text("\n")
+        for i in range(2):
+            env = os.environ.copy()
+            env["CUR_WORKER"] = str(idx + i)
+            cmd = f"timeout 5m run_once {harness.name} {dummy_seed}"
+            ret = await util.async_run_cmd(["/bin/bash", "-c", cmd], env=env)
+            cov_file = Path(str(dummy_seed) + ".cov")
+            if cov_file.exists():
+                return json.loads(cov_file.read_text())
+        return None
+
+    async def update_conf(name, harness, idx):
+        if harness.cp.language != "jvm":
+            return await llvm_symbolzer_based(name, harness)
+        covs = await get_dummy_cov(harness, idx)
+        if covs == None or len(covs) == 0:
+            for key in ["/src/repo/", "/src/"]:
+                key = key + f"**/{harness.name}.java"
+                cands = glob.glob(key, recursive=True)
+                if len(cands) > 0:
+                    conf[name] = normalize_src(cands[0])
+                    break
+            return
+        for func in covs:
+            if KEY in func:
+                src = covs[func]["src"]
+                conf[name] = normalize_src(src)
+                break
+
+    async def update_all(cp):
+        jobs = []
+        idx = 0
+        for name, harness in cp.harnesses.items():
+            jobs.append(update_conf(name, harness, idx))
+            idx += 1
+        await asyncio.gather(*jobs)
+
+    asyncio.run(update_all(cp))
+
+    to_yaml = []
+    with open(conf_path, "w") as f:
+        for name in conf:
+            to_yaml.append({"name": name, "path": conf[name]})
+        yaml.dump({"harness_files": to_yaml}, f)
+    cp.log("Created Conf>\n" + conf_path.read_text())
+
+    if os.getenv("CRS_TEST") == "True" and answer_path_if_exist.exists():
+        with open(answer_path_if_exist, "r") as f:
+            answer_conf = yaml.safe_load(f)["harness_files"]
+            for answer in answer_conf:
+                name = answer["name"]
+                path = answer["path"]
+                abs_path = Path(
+                    path.replace("$REPO", "/src/repo").replace("$PROJECT", "/src")
+                )
+                assert abs_path.exists(), f"Path {path} ({abs_path}) does not exist"
+                assert name in conf, f"{name} not in conf"
+                ours = Path(
+                    str(conf[name])
+                    .replace("$REPO", "/src/repo")
+                    .replace("$PROJECT", "/src")
+                )
+                assert ours.exists(), f"Our answer {ours} does not exist"
+                assert ours.read_text() == abs_path.read_text()
+            cp.log("Same as the answer conf!")
+
+    cp.log("DONE")
+
+    return conf
 
 
 def add_env(key, value, replace=None):
@@ -543,28 +662,11 @@ def add_env(key, value, replace=None):
     util.set_env(key, opt)
 
 
-def log_oss_crs_environment():
-    """Log OSS-CRS environment variables if running in OSS-CRS mode."""
-    if CRSPaths.is_oss_crs_mode():
-        logging.info("=" * 60)
-        logging.info("OSS-CRS MODE DETECTED")
-        logging.info("=" * 60)
-        logging.info(f"  CRS_NAME: {os.environ.get('CRS_NAME', 'N/A')}")
-        logging.info(f"  CRS_TARGET: {os.environ.get('CRS_TARGET', 'N/A')}")
-        logging.info(f"  CPUs: {os.cpu_count()}")
-        logging.info(f"  TARGET_HARNESS: {os.environ.get('TARGET_HARNESS', 'N/A')}")
-        logging.info(f"  Output: {CRSPaths.get_pov_dir()}")
-        if CRSPaths.get_diff_path():
-            logging.info(f"  Delta mode: {CRSPaths.get_diff_path()}")
-        if CRSPaths.get_seed_share_dir():
-            logging.info(f"  Ensemble mode: {CRSPaths.get_seed_share_dir()}")
-        logging.info("=" * 60)
-
-
+CONF_PATH = Path("/src/.aixcc/config.yaml")
+TMP_CONF = Path("/src/.aixcc/config.yaml.tmp")
 if __name__ == "__main__":
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
-    log_oss_crs_environment()
-    conf = Config()
+    logging.basicConfig(level=logging.INFO)
+    conf = Config(0, 1).load("/crs.config")
     shm_size = os.cpu_count() * 4
     os.system(f"mount -o remount,size={shm_size}G /dev/shm")
     os.system("touch /dev/shm/aa")
@@ -576,8 +678,29 @@ if __name__ == "__main__":
             os.system(f"rm -rf {name}")
 
     add_env("ASAN_OPTIONS", "detect_leaks=0", "detect_leaks=1")
+    conf_create_mode = os.environ.get("CREATE_CONF", False) != False
+    if conf_create_mode:
+        if CONF_PATH.exists():
+            CONF_PATH.rename(TMP_CONF)
     cp = init_cp_in_runner()
-    handle_no_fdp(conf, cp)
+
+    if conf_create_mode:
+        names = list(cp.harnesses.keys())
+        for name in names:
+            if not name_filter(name, names):
+                del cp.harnesses[name]
+    else:
+        handle_no_fdp(conf, cp)
 
     crs = AnyCRS("CRS-Multilang", AnyHR, conf, cp)
+    if conf_create_mode:
+        output_path = Path(os.environ.get("CREATE_CONF"))
+        create_conf(cp, output_path, TMP_CONF)
+        exit(0)
+
+    redis_url = os.environ.get("CODE_INDEXER_REDIS_URL")
+    if redis_url:
+        crs.log(f"Code Indexer REDIS URL: {redis_url}")
+        wait_redis(redis_url)
+        crs.log(f"Code Indexer REDIS is available")
     crs.run()

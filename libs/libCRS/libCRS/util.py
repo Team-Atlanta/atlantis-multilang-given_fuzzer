@@ -1,13 +1,52 @@
 import asyncio
+import json
 import logging
 import os
 from pathlib import Path
 import subprocess
 import sys
+import time
 
 import coloredlogs
 
+__all__ = ["SharedFile", "TODO", "cp"]
+
 coloredlogs.install(fmt="%(asctime)s %(levelname)s %(message)s")
+
+
+class SharedFile:
+    def __init__(self, path: Path):
+        self.path = path
+
+    def __metadata_path(self):
+        path = self.path
+        return path.parent / f".meta_{path.name}"
+
+    def finalize(self):
+        with open(self.__metadata_path(), "wb") as f:
+            f.write(b"")
+        return self
+
+    def write(self, data: bytes):
+        with open(self.path, "wb") as f:
+            f.write(data)
+        self.finalize()
+
+    def is_finalized(self):
+        return self.__metadata_path().exists()
+
+    def wait(self):
+        logging.info(f"Wait SharedFile: {self.path}")
+        while not self.is_finalized():
+            time.sleep(1)
+
+    async def async_wait(self):
+        logging.info(f"Wait SharedFile: {self.path}")
+        while not self.is_finalized():
+            await asyncio.sleep(1)
+
+    def __str__(self):
+        return self.path.__str__()
 
 
 class TestResult:
@@ -60,6 +99,10 @@ class AsyncNamedLocks:
             if name not in self.__named_locks:
                 self.__named_locks[name] = asyncio.Lock()
             return self.__named_locks[name]
+
+
+def TODO(msg=""):
+    raise Exception(f"TODO: {msg}")
 
 
 def BAR():

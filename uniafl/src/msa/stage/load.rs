@@ -6,7 +6,7 @@ use std::{borrow::Cow, path::PathBuf, sync::Arc};
 use crate::{
     common::utils,
     executor::Executor,
-    input_gen::client::InputGenClient,
+    input_gen::client,
     msa::{
         manager::{ExecMode, MsaManager},
         stage::MsaStage,
@@ -30,7 +30,7 @@ pub struct LoadStage {
 impl LoadStage {
     pub fn check_new(config_path: &PathBuf, always_create: bool) -> Option<Self> {
         let name = "Load";
-        if always_create || InputGenClient::is_on_config(&name.to_string(), config_path, true) {
+        if always_create || client::is_on_config(&name.to_string(), config_path, true) {
             let config = utils::load_json::<LoadStageConf>(config_path)
                 .unwrap_or_else(|e| panic!("Error in load_json: {}", e));
             Some(Self::new_with(

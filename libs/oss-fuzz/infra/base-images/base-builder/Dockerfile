@@ -21,7 +21,7 @@ COPY install_deps.sh /
 RUN /install_deps.sh && rm /install_deps.sh
 
 # Build and install latest Python 3.10.
-ENV PYTHON_VERSION=3.10.14
+ENV PYTHON_VERSION 3.10.14
 RUN PYTHON_DEPS="\
         zlib1g-dev \
         libncurses5-dev \
@@ -51,7 +51,7 @@ RUN PYTHON_DEPS="\
     apt-get remove -y $PYTHON_DEPS # https://github.com/google/oss-fuzz/issues/3888
 
 
-ENV CCACHE_VERSION=4.10.2
+ENV CCACHE_VERSION 4.10.2
 RUN cd /tmp && curl -OL https://github.com/ccache/ccache/releases/download/v$CCACHE_VERSION/ccache-$CCACHE_VERSION.tar.xz && \
     tar -xvf ccache-$CCACHE_VERSION.tar.xz && cd ccache-$CCACHE_VERSION && \
     mkdir build && cd build && \
@@ -65,28 +65,28 @@ RUN unset CFLAGS CXXFLAGS && pip3 install -v --no-cache-dir \
     six==1.15.0 && rm -rf /tmp/*
 
 # Install Bazel through Bazelisk, which automatically fetches the latest Bazel version.
-ENV BAZELISK_VERSION=1.9.0
+ENV BAZELISK_VERSION 1.9.0
 RUN curl -L https://github.com/bazelbuild/bazelisk/releases/download/v$BAZELISK_VERSION/bazelisk-linux-amd64 -o /usr/local/bin/bazel && \
     chmod +x /usr/local/bin/bazel
 
 # Default build flags for various sanitizers.
-ENV SANITIZER_FLAGS_address="-fsanitize=address -fsanitize-address-use-after-scope"
-ENV SANITIZER_FLAGS_hwaddress="-fsanitize=hwaddress -fuse-ld=lld -Wno-unused-command-line-argument"
+ENV SANITIZER_FLAGS_address "-fsanitize=address -fsanitize-address-use-after-scope"
+ENV SANITIZER_FLAGS_hwaddress "-fsanitize=hwaddress -fuse-ld=lld -Wno-unused-command-line-argument"
 
 # Set of '-fsanitize' flags matches '-fno-sanitize-recover' + 'unsigned-integer-overflow'.
-ENV SANITIZER_FLAGS_undefined="-fsanitize=array-bounds,bool,builtin,enum,function,integer-divide-by-zero,null,object-size,return,returns-nonnull-attribute,shift,signed-integer-overflow,unsigned-integer-overflow,unreachable,vla-bound,vptr -fno-sanitize-recover=array-bounds,bool,builtin,enum,function,integer-divide-by-zero,null,object-size,return,returns-nonnull-attribute,shift,signed-integer-overflow,unreachable,vla-bound,vptr"
+ENV SANITIZER_FLAGS_undefined "-fsanitize=array-bounds,bool,builtin,enum,function,integer-divide-by-zero,null,object-size,return,returns-nonnull-attribute,shift,signed-integer-overflow,unsigned-integer-overflow,unreachable,vla-bound,vptr -fno-sanitize-recover=array-bounds,bool,builtin,enum,function,integer-divide-by-zero,null,object-size,return,returns-nonnull-attribute,shift,signed-integer-overflow,unreachable,vla-bound,vptr"
 
 # Don't include "function" since it is unsupported on aarch64.
 ENV SANITIZER_FLAGS_undefined_aarch64 "-fsanitize=array-bounds,bool,builtin,enum,integer-divide-by-zero,null,object-size,return,returns-nonnull-attribute,shift,signed-integer-overflow,unsigned-integer-overflow,unreachable,vla-bound,vptr -fno-sanitize-recover=array-bounds,bool,builtin,enum,integer-divide-by-zero,null,object-size,return,returns-nonnull-attribute,shift,signed-integer-overflow,unreachable,vla-bound,vptr"
 
-ENV SANITIZER_FLAGS_memory="-fsanitize=memory -fsanitize-memory-track-origins"
+ENV SANITIZER_FLAGS_memory "-fsanitize=memory -fsanitize-memory-track-origins"
 
-ENV SANITIZER_FLAGS_thread="-fsanitize=thread"
+ENV SANITIZER_FLAGS_thread "-fsanitize=thread"
 
-ENV SANITIZER_FLAGS_introspector="-O0 -flto -fno-inline-functions -fuse-ld=gold -Wno-unused-command-line-argument"
+ENV SANITIZER_FLAGS_introspector "-O0 -flto -fno-inline-functions -fuse-ld=gold -Wno-unused-command-line-argument"
 
 # Do not use any sanitizers in the coverage build.
-ENV SANITIZER_FLAGS_coverage="-fsanitize=address"
+ENV SANITIZER_FLAGS_coverage "-fsanitize=address"
 
 # We use unsigned-integer-overflow as an additional coverage signal and have to
 # suppress error messages. See https://github.com/google/oss-fuzz/issues/910.
@@ -100,7 +100,7 @@ ENV COVERAGE_FLAGS="-fsanitize=fuzzer-no-link"
 
 # Use '-Wno-unused-command-line-argument' to suppress "warning: -ldl: 'linker' input unused"
 # messages which are treated as errors by some projects.
-ENV COVERAGE_FLAGS_coverage="-fprofile-instr-generate -fcoverage-mapping -pthread -Wl,--no-as-needed -Wl,-ldl -Wl,-lm -Wno-unused-command-line-argument"
+ENV COVERAGE_FLAGS_coverage "-fprofile-instr-generate -fcoverage-mapping -pthread -Wl,--no-as-needed -Wl,-ldl -Wl,-lm -Wno-unused-command-line-argument"
 
 # Default sanitizer, fuzzing engine and architecture to use.
 ENV SANITIZER="address"
@@ -118,7 +118,7 @@ ENV LIB_FUZZING_ENGINE_DEPRECATED="/usr/lib/libFuzzingEngine.a"
 ENV LIB_FUZZING_ENGINE="/usr/lib/libFuzzingEngine.a"
 
 # TODO: remove after tpm2 catchup.
-ENV FUZZER_LDFLAGS=""
+ENV FUZZER_LDFLAGS ""
 
 WORKDIR $SRC
 
@@ -203,11 +203,11 @@ RUN mkdir -p /ccache/bin && mkdir -p /ccache/cache && \
     ln -s /usr/local/bin/ccache /ccache/bin/clang++ && \
     ln -s /usr/local/bin/ccache /ccache/bin/clang-jcc && \
     ln -s /usr/local/bin/ccache /ccache/bin/clang++-jcc
-ENV CCACHE_DIR=/ccache/cache
+ENV CCACHE_DIR /ccache/cache
 
 # Don't check that the compiler is the same, so we can switch between jcc and
 # clang under the hood and re-use the same build cache.
-ENV CCACHE_COMPILERCHECK=none
-ENV CCACHE_COMPILERTYPE=clang
+ENV CCACHE_COMPILERCHECK none
+ENV CCACHE_COMPILERTYPE clang
 
 CMD ["compile"]

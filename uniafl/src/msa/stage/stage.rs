@@ -10,7 +10,7 @@ use std::{borrow::Cow, path::PathBuf};
 
 use crate::{
     executor::Executor,
-    input_gen::client::InputGenClient,
+    input_gen::client,
     msa::{
         manager::{ExecMode, MsaManager, NO_SEED_ID},
         state::UniState,
@@ -24,7 +24,7 @@ pub struct TestStage {
 impl TestStage {
     pub fn new(config_path: &PathBuf) -> Option<Self> {
         let name = Cow::Borrowed("test");
-        if InputGenClient::is_on_config(&name.to_string(), config_path, false) {
+        if client::is_on_config(&name.to_string(), config_path, false) {
             Some(Self { name })
         } else {
             None

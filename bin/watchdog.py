@@ -8,6 +8,7 @@ import time
 from pathlib import Path
 
 
+
 def setup_file_log_for_test(logfile: str) -> None:
     logger = logging.getLogger()
     formatter = logging.Formatter("%(asctime)s - %(levelname)s - %(message)s")
@@ -119,7 +120,7 @@ def main():
     )
     args = parser.parse_args()
 
-    logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
+    logging.basicConfig(level=logging.INFO)
 
     while True:
         log_uniafl_status(

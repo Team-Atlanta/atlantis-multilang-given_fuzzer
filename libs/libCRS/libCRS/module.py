@@ -5,8 +5,9 @@ from pathlib import Path
 import sys
 
 from .crs import CRS, HarnessRunner
+from .util import async_run_cmd
 
-__all__ = ["Module"]
+__all__ = ["Module", "LLM_Module"]
 
 
 class Module(ABC):
@@ -135,3 +136,16 @@ class Module(ABC):
     @abstractmethod
     async def _async_get_mock_result(self, harness_runner: HarnessRunner | None):
         pass
+
+
+class LLM_Module(Module):
+    def is_on(self) -> bool:
+        return self.crs.config.llm_on and self.crs.config.is_module_on(self.name)
+
+    async def async_run_llm_cmd(self, msg: str, *args, **kwargs):
+        async with self.crs.llm_lock:
+            if await self.crs.async_in_llm_limit():
+                self.log(msg)
+                return await async_run_cmd(*args, **kwargs)
+            else:
+                self.log("Out of LLM credit")
