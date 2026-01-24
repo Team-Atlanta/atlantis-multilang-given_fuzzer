@@ -200,6 +200,8 @@ class CRS(ABC):
     def alloc_cpu(self, hrunners: list["HarnessRunner"]):
         total = self.config.ncpu
         cnt = len(hrunners)
+        if cnt == 0:
+            self.error("No harnesses to allocate CPUs for")
         avg = int(total / cnt)
         mores = random.sample(range(cnt), total % cnt)
         for hrunner in hrunners:

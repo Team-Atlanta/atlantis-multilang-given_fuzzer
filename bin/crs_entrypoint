@@ -26,6 +26,10 @@ export SRC_DIR="${SRC_DIR:-/src}"
 export OUT_DIR="${OUT_DIR:-/out}"
 export OUT="${OUT:-$OUT_DIR}"
 export OSS_CRS_ARTIFACTS_DIR="${OSS_CRS_ARTIFACTS_DIR:-/artifacts}"
+# Read sanitizer from build metadata, fallback to env/default
+if [ -z "${SANITIZER:-}" ] && [ -f "${OUT_DIR:-/out}/.crs-sanitizer" ]; then
+    SANITIZER=$(cat "${OUT_DIR:-/out}/.crs-sanitizer")
+fi
 export SANITIZER="${SANITIZER:-address}"
 
 # =============================================================================
@@ -75,14 +79,35 @@ do_run_harness() {
     # Validate input
     [ -d "$OUT_DIR" ] || error "No $OUT_DIR directory mounted"
 
-    # Verify harness exists
+    # Verify harness exists (with normalization for @ and case differences)
     if [ ! -x "$OUT_DIR/$HARNESS" ]; then
         if [ -x "$OUT_DIR/${HARNESS}_fuzzer" ]; then
             HARNESS="${HARNESS}_fuzzer"
         elif [ -f "$OUT_DIR/$HARNESS" ]; then
             chmod +x "$OUT_DIR/$HARNESS"
         else
-            log "Warning: Harness binary not found at $OUT_DIR/$HARNESS"
+            # Try to find binary by normalized name match:
+            # OSS-Fuzz uses @ for options (e.g., harness@NO_OOM) which frameworks
+            # may normalize to harness_no_oom. Find the actual binary name.
+            HARNESS_LOWER=$(echo "$HARNESS" | tr '[:upper:]' '[:lower:]')
+            FOUND=""
+            for bin in "$OUT_DIR"/*; do
+                [ -f "$bin" ] || continue
+                BIN_NAME=$(basename "$bin")
+                # Normalize: replace @ with _, lowercase
+                BIN_NORMALIZED=$(echo "$BIN_NAME" | tr '@' '_' | tr '[:upper:]' '[:lower:]')
+                if [ "$BIN_NORMALIZED" = "$HARNESS_LOWER" ]; then
+                    FOUND="$BIN_NAME"
+                    break
+                fi
+            done
+            if [ -n "$FOUND" ]; then
+                log "Resolved harness: $HARNESS -> $FOUND"
+                HARNESS="$FOUND"
+                [ -x "$OUT_DIR/$HARNESS" ] || chmod +x "$OUT_DIR/$HARNESS"
+            else
+                log "Warning: Harness binary not found at $OUT_DIR/$HARNESS"
+            fi
         fi
     fi
 

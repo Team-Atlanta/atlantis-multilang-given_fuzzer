@@ -5,7 +5,7 @@ import stat
 
 ALLOWED_FUZZ_TARGET_EXTENSIONS = ["", ".exe"]
 FUZZ_TARGET_SEARCH_STRING = "LLVMFuzzerTestOneInput"
-VALID_TARGET_NAME_REGEX = re.compile(r"^[a-zA-Z0-9._-]+$")
+VALID_TARGET_NAME_REGEX = re.compile(r"^[a-zA-Z0-9._@-]+$")
 BLOCKLISTED_TARGET_NAME_REGEX = re.compile(r"^(jazzer_driver.*)$")
 
 

@@ -507,9 +507,34 @@ impl Executor {
         ret
     }
 
+    /// Find the byte offset past the last consecutive `    #N ` stack frame line.
+    fn find_stack_end(data: &[u8]) -> usize {
+        let mut pos = 0;
+        let mut last_end = 0;
+        while pos < data.len() {
+            // Find end of current line
+            let line_end = data[pos..]
+                .iter()
+                .position(|&b| b == b'\n')
+                .map(|p| pos + p + 1)
+                .unwrap_or(data.len());
+            let line = &data[pos..line_end];
+            // Check if line matches "    #N " pattern (4 spaces, hash, digits, space)
+            if line.starts_with(b"    #") {
+                let after_hash = &line[5..];
+                let digit_end = after_hash.iter().position(|b| !b.is_ascii_digit()).unwrap_or(0);
+                if digit_end > 0 && after_hash.get(digit_end) == Some(&b' ') {
+                    last_end = line_end;
+                    pos = line_end;
+                    continue;
+                }
+            }
+            break;
+        }
+        last_end
+    }
+
     pub fn parse_libfuzzer_crash_log(log: &[u8], parse_err_head: bool) -> Option<Vec<u8>> {
-        // Skip DEDUP_TOKEN - too coarse-grained (function names only), use call stack instead
-        // which includes file:line info to distinguish multiple vulns in the same function
         let cur = log;
         let from = if parse_err_head {
             0
@@ -519,8 +544,16 @@ impl Executor {
         let cur = &cur[from..];
         let from = utils::find_subarr(cur, "    #0 ".as_bytes())?;
         let cur = &cur[from..];
-        let last = utils::find_subarr(cur, " in LLVMFuzzerTestOneInput".as_bytes())?;
-        let last = last + utils::find_subarr(&cur[last..], "\n".as_bytes())?;
+        // Try to find LLVMFuzzerTestOneInput (typical ASAN/main-thread stack)
+        let last = if let Some(last) = utils::find_subarr(cur, " in LLVMFuzzerTestOneInput".as_bytes()) {
+            last + utils::find_subarr(&cur[last..], "\n".as_bytes())?
+        } else {
+            // Background thread (e.g. UBSan): collect all #N frames until end of stack
+            Self::find_stack_end(cur)
+        };
+        if last == 0 {
+            return None;
+        }
         Self::filter_valid_paths_from_bytes(&cur[..last])
     }
 
@@ -622,8 +655,12 @@ impl Executor {
         match self.msa_mgr.language {
             Language::C | Language::Cpp | Language::Rust | Language::Go => {
                 if let Some(log) = msa_input.get_crash_log() {
-                    let log =
-                        Self::parse_libfuzzer_crash_log(log, is_timeout).unwrap_or(Vec::new());
+                    // Try parsing with error marker first, fallback to start-of-log,
+                    // then DEDUP_TOKEN (function-level dedup as last resort)
+                    let log = Self::parse_libfuzzer_crash_log(log, is_timeout)
+                        .or_else(|| Self::parse_libfuzzer_crash_log(log, true))
+                        .or_else(|| Self::parse_dedup_tokens(log))
+                        .unwrap_or(Vec::new());
                     if log.is_empty() {
                         msa_input.set_crash_log(EMPTY_CRASH_CALLSTACK);
                     } else {

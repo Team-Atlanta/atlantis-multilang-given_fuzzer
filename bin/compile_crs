@@ -41,6 +41,9 @@ export SANITIZER="${ORIG_SANITIZER}"
 export OUT="${ORIG_OUT}"
 compile
 
+# Record which sanitizer was used (runner reads this)
+echo "${ORIG_SANITIZER}" > "${ORIG_OUT}/.crs-sanitizer"
+
 # =============================================================================
 # Package source tree (needed by runner for language detection, coverage, etc.)
 # =============================================================================
