@@ -221,7 +221,7 @@ impl Executor {
 
     pub fn save_crash_log(&self, fpath: &PathBuf, crash_log: &[u8]) {
         if let Some(fname) = fpath.file_name().and_then(|n| n.to_str()) {
-            let crash_log_fname = format!("{}.crash_log", fname);
+            let crash_log_fname = format!(".{}.crash_log", fname);
             let mut crash_log_fpath = fpath.clone();
             crash_log_fpath.set_file_name(crash_log_fname);
 
@@ -233,7 +233,7 @@ impl Executor {
 
     pub fn save_call_stack(&self, fpath: &PathBuf, crash_log: &[u8]) {
         if let Some(fname) = fpath.file_name().and_then(|n| n.to_str()) {
-            let callstack_fname = format!("{}.callstack", fname);
+            let callstack_fname = format!(".{}.callstack", fname);
             let mut callstack_fpath = fpath.clone();
             callstack_fpath.set_file_name(callstack_fname);
 

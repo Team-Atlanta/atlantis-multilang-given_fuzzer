@@ -516,7 +516,7 @@ class AnyCRS(CRS):
 
 
 def wait_redis(redis_url):
-    r = Redis(redis_url)
+    r = Redis.from_url(redis_url)
     while True:
         try:
             if r.ping():
@@ -667,7 +667,7 @@ TMP_CONF = Path("/src/.aixcc/config.yaml.tmp")
 if __name__ == "__main__":
     logging.basicConfig(level=logging.INFO)
     conf = Config(0, 1).load("/crs.config")
-    shm_size = os.cpu_count() * 4
+    shm_size = len(os.sched_getaffinity(0)) * 4
     os.system(f"mount -o remount,size={shm_size}G /dev/shm")
     os.system("touch /dev/shm/aa")
     shm = Path("/dev/shm")

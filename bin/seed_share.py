@@ -43,7 +43,7 @@ class SeedShare:
             return
         n = 0
         for src_seed in src_dir.iterdir():
-            if src_seed in self.loaded or src_seed.name.startswith("."):
+            if src_seed in self.loaded or src_seed.name.startswith(".") or src_seed.name.endswith(".cov"):
                 continue
             self.loaded.add(src_seed)
             dst = self.our_dst_dir / src_seed.name

@@ -62,17 +62,22 @@ rsync -a --delete "${SNAPSHOT_DIR}/" "${SRC_DIR}/"
 rm -rf "${SNAPSHOT_DIR}"
 cd "${SRC_DIR}"
 
-COVERAGE_OUT="${ORIG_OUT}/.coverage-out"
-log "Building coverage binary (SANITIZER=coverage, OUT=${COVERAGE_OUT})"
-mkdir -p "${COVERAGE_OUT}"
-export SANITIZER="coverage"
-export OUT="${COVERAGE_OUT}"
-
-# Coverage build is best-effort; fuzzing works without it via addr2line fallback
-if compile; then
-    log "Coverage build succeeded: ${COVERAGE_OUT}"
+# JVM uses Jazzer+Redis coverage, not LLVM profiling — skip coverage build
+if [ "$FUZZING_LANGUAGE" = "jvm" ]; then
+    log "Skipping coverage build (JVM uses Jazzer+Redis coverage)"
 else
-    log "Warning: Coverage build failed (fuzzing will use addr2line fallback)"
+    COVERAGE_OUT="${ORIG_OUT}/.coverage-out"
+    log "Building coverage binary (SANITIZER=coverage, OUT=${COVERAGE_OUT})"
+    mkdir -p "${COVERAGE_OUT}"
+    export SANITIZER="coverage"
+    export OUT="${COVERAGE_OUT}"
+
+    # Coverage build is best-effort; fuzzing works without it via addr2line fallback
+    if compile; then
+        log "Coverage build succeeded: ${COVERAGE_OUT}"
+    else
+        log "Warning: Coverage build failed (fuzzing will use addr2line fallback)"
+    fi
 fi
 
 log "Build complete"

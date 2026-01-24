@@ -103,7 +103,7 @@ class Config:
         self.test_wo_harness: bool = (
             os.environ.get("CRS_TEST_WO_HARNESS", "True") == "True"
         )
-        self.ncpu: int = os.cpu_count()
+        self.ncpu: int = len(os.sched_getaffinity(0))
         if os.environ.get("N_CPU"):
             self.ncpu = int(os.environ.get("N_CPU"))
         self.n_llm_lock: int = 3
@@ -124,7 +124,7 @@ class Config:
             if key in config:
                 setattr(self, key, config[key])
         self.ncpu = int(self.ncpu)
-        env_ncpu = os.cpu_count()
+        env_ncpu = len(os.sched_getaffinity(0))
         if env_ncpu < self.ncpu:
             self.ncpu = env_ncpu
         self.n_llm_lock = int(self.n_llm_lock)
