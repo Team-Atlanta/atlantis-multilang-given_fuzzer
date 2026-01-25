@@ -4,14 +4,14 @@
 # =============================================================================
 # Builds the target harness twice from clean source:
 #   1. SANITIZER=address → /out/  (fuzzing binary with ASAN)
-#   2. SANITIZER=coverage → /out/.coverage-out/  (coverage-instrumented binary)
+#   2. SANITIZER=coverage → /out/coverage-out/  (coverage-instrumented binary)
 #
 # Uses rsync to snapshot/restore source between builds, ensuring each build
 # starts from a clean state (no cross-contamination from build artifacts).
 #
 # Coverage binaries are stored inside /out/ so they travel with the build
 # output when the OSS-CRS framework copies /out/ to the runner container.
-# The runner's crs_entrypoint symlinks /coverage-out → /out/.coverage-out/.
+# The runner's crs_entrypoint symlinks /coverage-out → /out/coverage-out/.
 #
 # If the coverage build fails, fuzzing still works with addr2line fallback.
 # =============================================================================
@@ -25,51 +25,65 @@ log() {
 # Save original values
 ORIG_SANITIZER="${SANITIZER:-address}"
 ORIG_OUT="${OUT:-/out}"
+ARTIFACTS_DIR="${ARTIFACTS:-/artifacts}"
+TARBALL_DIR="${ARTIFACTS_DIR}/tarballs"
 SRC_DIR="${SRC:-/src}"
-SNAPSHOT_DIR="/tmp/.crs-src-snapshot"
+SNAPSHOT_DIR="/tmp/crs-src-snapshot"
 
-# Snapshot source tree before first build (for clean coverage build)
-log "Saving source snapshot via rsync"
+# Use pigz if available, fallback to gzip
+if command -v pigz &> /dev/null; then
+    COMPRESS_CMD="pigz"
+else
+    COMPRESS_CMD="gzip"
+fi
+
+# Create tarball directory
+mkdir -p "${TARBALL_DIR}"
+
+# =============================================================================
+# [1/4] Snapshot source tree
+# =============================================================================
+log "[1/4] Saving source snapshot via rsync"
 mkdir -p "${SNAPSHOT_DIR}"
 rsync -a "${SRC_DIR}/" "${SNAPSHOT_DIR}/"
 
 # =============================================================================
-# Build 1: Fuzzing binary (with sanitizer)
+# [2/4] Build fuzzing binary (with sanitizer)
 # =============================================================================
-log "Building fuzzing binary (SANITIZER=${ORIG_SANITIZER}, OUT=${ORIG_OUT})"
+log "[2/4] Building fuzzing binary (SANITIZER=${ORIG_SANITIZER}, OUT=${ORIG_OUT})"
 export SANITIZER="${ORIG_SANITIZER}"
 export OUT="${ORIG_OUT}"
 compile
 
 # Record which sanitizer was used (runner reads this)
-echo "${ORIG_SANITIZER}" > "${ORIG_OUT}/.crs-sanitizer"
+echo "${ORIG_SANITIZER}" > "${TARBALL_DIR}/crs-sanitizer"
 
 # =============================================================================
-# Package source tree (needed by runner for coverage, etc.)
+# [3/4] Package tarballs for runner
 # =============================================================================
-# Create from pre-build snapshot (excludes .git and build artifacts for size)
-log "Creating source tarball for runner"
-tar czf "${ORIG_OUT}/.crs-src.tar.gz" \
+log "[3/4] Creating tarballs for runner"
+
+# Source tarball (excludes .git and build artifacts for size)
+log "  Creating crs-src.tar.gz..."
+tar --use-compress-program="${COMPRESS_CMD}" -cf "${TARBALL_DIR}/crs-src.tar.gz" \
     --exclude='.git' --exclude='build' --exclude='_build' \
     --exclude='*.o' --exclude='*.a' --exclude='*.so' \
     --exclude='*.pyc' --exclude='__pycache__' \
     -C "${SNAPSHOT_DIR}" . 2>/dev/null || true
 
-# =============================================================================
-# Package OSS-Fuzz project files (project.yaml, .aixcc/, build.sh, etc.)
-# =============================================================================
+# OSS-Fuzz project tarball (project.yaml, .aixcc/, build.sh, etc.)
 OSSFUZZ_PROJECT_DIR="/ossfuzz-project"
 if [ -d "${OSSFUZZ_PROJECT_DIR}" ]; then
-    log "Creating OSS-Fuzz project tarball for runner"
-    tar czf "${ORIG_OUT}/.crs-project.tar.gz" \
+    log "  Creating crs-project.tar.gz..."
+    tar --use-compress-program="${COMPRESS_CMD}" -cf "${TARBALL_DIR}/crs-project.tar.gz" \
         -C "${OSSFUZZ_PROJECT_DIR}" . 2>/dev/null || true
 fi
 
 # =============================================================================
-# Build 2: Coverage binary (stored inside /out/ for portability)
+# [4/4] Build coverage binary (optional)
 # =============================================================================
 # Restore source tree to pre-build state so project build scripts run cleanly
-log "Restoring clean source via rsync"
+log "[4/4] Building coverage binary"
 rm -rf ${WORK:-/work}/*
 rsync -a --delete "${SNAPSHOT_DIR}/" "${SRC_DIR}/"
 rm -rf "${SNAPSHOT_DIR}"
@@ -77,20 +91,25 @@ cd "${SRC_DIR}"
 
 # JVM uses Jazzer+Redis coverage, not LLVM profiling — skip coverage build
 if [ "$FUZZING_LANGUAGE" = "jvm" ]; then
-    log "Skipping coverage build (JVM uses Jazzer+Redis coverage)"
+    log "  Skipping (JVM uses Jazzer+Redis coverage)"
 else
-    COVERAGE_OUT="${ORIG_OUT}/.coverage-out"
-    log "Building coverage binary (SANITIZER=coverage, OUT=${COVERAGE_OUT})"
+    COVERAGE_OUT="${ORIG_OUT}/coverage-out"
+    log "  Building (SANITIZER=coverage, OUT=${COVERAGE_OUT})"
     mkdir -p "${COVERAGE_OUT}"
     export SANITIZER="coverage"
     export OUT="${COVERAGE_OUT}"
 
     # Coverage build is best-effort; fuzzing works without it via addr2line fallback
     if compile; then
-        log "Coverage build succeeded: ${COVERAGE_OUT}"
+        log "  Coverage build succeeded"
     else
-        log "Warning: Coverage build failed (fuzzing will use addr2line fallback)"
+        log "  Warning: Coverage build failed (fuzzing will use addr2line fallback)"
     fi
 fi
 
-log "Build complete"
+# Mark build as complete
+touch "${TARBALL_DIR}/DONE"
+
+log "=== Build complete ==="
+log "Tarballs in ${TARBALL_DIR}:"
+ls -la "${TARBALL_DIR}/"

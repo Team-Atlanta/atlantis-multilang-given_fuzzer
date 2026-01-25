@@ -26,9 +26,10 @@ export SRC_DIR="${SRC_DIR:-/src}"
 export OUT_DIR="${OUT_DIR:-/out}"
 export OUT="${OUT:-$OUT_DIR}"
 export OSS_CRS_ARTIFACTS_DIR="${OSS_CRS_ARTIFACTS_DIR:-/artifacts}"
+export TARBALL_DIR="${OSS_CRS_ARTIFACTS_DIR}/tarballs"
 # Read sanitizer from build metadata, fallback to env/default
-if [ -z "${SANITIZER:-}" ] && [ -f "${OUT_DIR:-/out}/.crs-sanitizer" ]; then
-    SANITIZER=$(cat "${OUT_DIR:-/out}/.crs-sanitizer")
+if [ -z "${SANITIZER:-}" ] && [ -f "${TARBALL_DIR}/crs-sanitizer" ]; then
+    SANITIZER=$(cat "${TARBALL_DIR}/crs-sanitizer")
 fi
 export SANITIZER="${SANITIZER:-address}"
 
@@ -129,23 +130,23 @@ do_run_harness() {
     mkdir -p "$OSS_CRS_ARTIFACTS_DIR/corpus"
     mkdir -p "$OSS_CRS_ARTIFACTS_DIR/crs-data"
 
-    # Symlink coverage binaries (built by builder.Dockerfile into /out/.coverage-out/)
-    if [ -d "$OUT_DIR/.coverage-out" ] && [ ! -e "/coverage-out" ]; then
-        ln -s "$OUT_DIR/.coverage-out" /coverage-out
-        log "Coverage binary: /coverage-out (via $OUT_DIR/.coverage-out)"
+    # Symlink coverage binaries (built by builder.Dockerfile into /out/coverage-out/)
+    if [ -d "$OUT_DIR/coverage-out" ] && [ ! -e "/coverage-out" ]; then
+        ln -s "$OUT_DIR/coverage-out" /coverage-out
+        log "Coverage binary: /coverage-out (via $OUT_DIR/coverage-out)"
     fi
 
     # Restore OSS-Fuzz project files (project.yaml, .aixcc/, build.sh, etc.)
     mkdir -p /src
-    if [ -f "$OUT_DIR/.crs-project.tar.gz" ]; then
-        tar xzf "$OUT_DIR/.crs-project.tar.gz" -C /src/ 2>/dev/null || true
-        log "Restored OSS-Fuzz project files from .crs-project.tar.gz"
+    if [ -f "$TARBALL_DIR/crs-project.tar.gz" ]; then
+        tar xzf "$TARBALL_DIR/crs-project.tar.gz" -C /src/ 2>/dev/null || true
+        log "Restored OSS-Fuzz project files from crs-project.tar.gz"
     fi
 
     # Restore source tree from builder tarball
-    if [ -f "$OUT_DIR/.crs-src.tar.gz" ]; then
-        tar xzf "$OUT_DIR/.crs-src.tar.gz" -C /src/ 2>/dev/null || true
-        log "Restored source tree from .crs-src.tar.gz"
+    if [ -f "$TARBALL_DIR/crs-src.tar.gz" ]; then
+        tar xzf "$TARBALL_DIR/crs-src.tar.gz" -C /src/ 2>/dev/null || true
+        log "Restored source tree from crs-src.tar.gz"
     fi
 
     # Fallback if project.yaml still not found
