@@ -43,6 +43,10 @@ ENV ARCHITECTURE=x86_64
 # Install rsync for clean source snapshots between build variants
 RUN apt-get update -qq && apt-get install -y -qq rsync >/dev/null 2>&1 || true
 
+# Copy OSS-Fuzz project files (Dockerfile, build.sh, project.yaml, .aixcc/, etc.) to /src/
+# This ensures project.yaml is available at runtime for language detection
+COPY --from=project . /ossfuzz-project/
+
 COPY bin/compile_crs /usr/local/bin/compile_crs
 
 CMD ["compile_crs"]

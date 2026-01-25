@@ -135,17 +135,23 @@ do_run_harness() {
         log "Coverage binary: /coverage-out (via $OUT_DIR/.coverage-out)"
     fi
 
-    # Restore source tree from builder tarball (includes project.yaml, .aixcc/, source files)
+    # Restore OSS-Fuzz project files (project.yaml, .aixcc/, build.sh, etc.)
+    mkdir -p /src
+    if [ -f "$OUT_DIR/.crs-project.tar.gz" ]; then
+        tar xzf "$OUT_DIR/.crs-project.tar.gz" -C /src/ 2>/dev/null || true
+        log "Restored OSS-Fuzz project files from .crs-project.tar.gz"
+    fi
+
+    # Restore source tree from builder tarball
+    if [ -f "$OUT_DIR/.crs-src.tar.gz" ]; then
+        tar xzf "$OUT_DIR/.crs-src.tar.gz" -C /src/ 2>/dev/null || true
+        log "Restored source tree from .crs-src.tar.gz"
+    fi
+
+    # Fallback if project.yaml still not found
     if [ ! -f "/src/project.yaml" ]; then
-        mkdir -p /src
-        if [ -f "$OUT_DIR/.crs-src.tar.gz" ]; then
-            tar xzf "$OUT_DIR/.crs-src.tar.gz" -C /src/ 2>/dev/null || true
-            log "Restored source tree from .crs-src.tar.gz"
-        fi
-        if [ ! -f "/src/project.yaml" ]; then
-            log "WARNING: project.yaml not found in source tarball, defaulting to language=c"
-            echo "language: c" > /src/project.yaml
-        fi
+        log "WARNING: project.yaml not found, defaulting to language=c"
+        echo "language: c" > /src/project.yaml
     fi
 
     # Handle ref.diff (OSS-CRS mounts at /ref.diff, libCRS expects /src/ref.diff)

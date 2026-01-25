@@ -45,7 +45,7 @@ compile
 echo "${ORIG_SANITIZER}" > "${ORIG_OUT}/.crs-sanitizer"
 
 # =============================================================================
-# Package source tree (needed by runner for language detection, coverage, etc.)
+# Package source tree (needed by runner for coverage, etc.)
 # =============================================================================
 # Create from pre-build snapshot (excludes .git and build artifacts for size)
 log "Creating source tarball for runner"
@@ -54,6 +54,16 @@ tar czf "${ORIG_OUT}/.crs-src.tar.gz" \
     --exclude='*.o' --exclude='*.a' --exclude='*.so' \
     --exclude='*.pyc' --exclude='__pycache__' \
     -C "${SNAPSHOT_DIR}" . 2>/dev/null || true
+
+# =============================================================================
+# Package OSS-Fuzz project files (project.yaml, .aixcc/, build.sh, etc.)
+# =============================================================================
+OSSFUZZ_PROJECT_DIR="/ossfuzz-project"
+if [ -d "${OSSFUZZ_PROJECT_DIR}" ]; then
+    log "Creating OSS-Fuzz project tarball for runner"
+    tar czf "${ORIG_OUT}/.crs-project.tar.gz" \
+        -C "${OSSFUZZ_PROJECT_DIR}" . 2>/dev/null || true
+fi
 
 # =============================================================================
 # Build 2: Coverage binary (stored inside /out/ for portability)
