@@ -1,0 +1,54 @@
+#!/bin/bash
+
+# =============================================================================
+# Download build outputs
+# =============================================================================
+libCRS download-build-output uniafl/build /out
+libCRS download-build-output uniafl/src /src
+libCRS download-build-output uniafl/project/ /src/
+libCRS download-build-output coverage/build /coverage-out
+
+# =============================================================================
+# Register dirs
+# =============================================================================
+
+# Automatically submit povs/seeds in these directories to oss-crs-infra
+libCRS register-submit-dir pov /povs 
+libCRS register-submit-dir seed /seeds
+libCRS register-submit-dir bug-candidate /bug-candidates
+
+# Automatically fetch shared data from oss-crs-infra (other CRS generated)
+libCRS register-fetch-dir pov /shared-povs
+libCRS register-fetch-dir seed /shared-seeds
+libCRS register-fetch-dir bug-candidate /shared-bug-candidates
+
+# =============================================================================
+# or you can submit one by one in CRS
+# =============================================================================
+# libCRS submit pov <pov_file_path>
+# libCRS submit seed <seed_file_path>
+# libCRS submit bug-candidate <bug_candidate_file_path>
+
+# =============================================================================
+# or you download all new shared data in CRS
+# =============================================================================
+# libCRS fetch povs <output_dir_path> # return a list of file names
+# libCRS fetch seeds <output_dir_path>
+# libCRS fetch bug-candidates <output_dir_path>
+
+
+# =============================================================================
+# Set env up for this CRS
+# =============================================================================
+
+export CRS_TARGET=$OSS_CRS_TARGET
+echo "{\"target_harnesses\": [\"$OSS_CRS_TARGET_HARNESS\"]}" > /crs.config
+
+mkdir -p "/crs-data"
+export POV_DIR="/povs"
+export CORPUS_DIR="/corpus"
+export CRS_DATA_DIR="/crs-data"
+export SEED_SHARE_DIR="/seed_share_dir"
+export BUG_CANDIDATE_DIR="/bug-candidates"
+
+main.py
