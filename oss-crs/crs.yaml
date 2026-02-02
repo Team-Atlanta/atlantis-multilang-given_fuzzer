@@ -9,7 +9,7 @@ prepare_phase:
 
 target_build_phase:
   uniafl-build:
-    dockerfile: oss-crs/docker-compose/builder.Dockerfile
+    dockerfile: oss-crs/dockerfiles/builder.Dockerfile
     additional_env:
       BUILD_TYPE: uniafl
     outputs:
@@ -17,7 +17,7 @@ target_build_phase:
       - uniafl/src
       - uniafl/project
   coverage-build:
-    dockerfile: oss-crs/docker-compose/builder.Dockerfile
+    dockerfile: oss-crs/dockerfiles/builder.Dockerfile
     additional_env:
       BUILD_TYPE: coverage
     outputs:
@@ -25,11 +25,11 @@ target_build_phase:
 
 crs_run_phase:
   fuzzer-1:
-    dockerfile: oss-crs/docker-compose/fuzzer.Dockerfile
+    dockerfile: oss-crs/dockerfiles/fuzzer.Dockerfile
     additional_env:
       FUZZING_INSTANCE_ID: "1"
   fuzzer-2:
-    dockerfile: oss-crs/docker-compose/fuzzer.Dockerfile
+    dockerfile: oss-crs/dockerfiles/fuzzer.Dockerfile
     additional_env:
       FUZZING_INSTANCE_ID: "2"
 
