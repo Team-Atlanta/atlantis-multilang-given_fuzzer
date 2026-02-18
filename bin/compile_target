@@ -3,7 +3,7 @@
 set -e
 
 log() {
-    echo "[compile_crs] $*"
+    echo "[compile_target] $*"
 }
 
 compile_uniafl_build() {

@@ -14,7 +14,7 @@
 # =============================================================================
 
 ARG target_base_image
-ARG crs_version
+ARG crs_version=latest
 
 # Reference archive images for CRS build tools
 FROM ghcr.io/team-atlanta/multilang-given_fuzzer-c-archive:${crs_version} AS crs-tools-c

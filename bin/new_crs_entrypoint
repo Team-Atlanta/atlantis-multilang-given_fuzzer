@@ -5,8 +5,8 @@
 # =============================================================================
 libCRS download-build-output uniafl/build /out
 libCRS download-build-output uniafl/src /src
-libCRS download-build-output uniafl/project/ /src/
-libCRS download-build-output coverage/build /coverage-out
+libCRS download-build-output uniafl/project /src/
+libCRS download-build-output coverage/build /coverage-out || echo "[entrypoint] coverage/build not available, continuing without coverage"
 
 # =============================================================================
 # Register dirs

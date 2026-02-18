@@ -203,7 +203,7 @@ class UniAFL(Module):
             "--pov-dir",
             hrunner.pov_dir,
             "--interval",
-            600,
+            str(600),
         ]
         return await util.async_run_cmd(watchdog_cmd)
 
@@ -222,7 +222,7 @@ class UniAFL(Module):
             "--our-dst-dir",
             hrunner.others_corpus_dir,
             "--interval",
-            300,
+            str(300),
         ]
         return await util.async_run_cmd(cmd)
 

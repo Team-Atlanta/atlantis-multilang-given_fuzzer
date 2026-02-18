@@ -26,12 +26,6 @@ target_build_phase:
 crs_run_phase:
   fuzzer-1:
     dockerfile: oss-crs/dockerfiles/fuzzer.Dockerfile
-    additional_env:
-      FUZZING_INSTANCE_ID: "1"
-  fuzzer-2:
-    dockerfile: oss-crs/dockerfiles/fuzzer.Dockerfile
-    additional_env:
-      FUZZING_INSTANCE_ID: "2"
 
 supported_target:
   mode:
@@ -39,6 +33,8 @@ supported_target:
     - delta
   language:
     - c
+    - c++
+    - jvm
   sanitizer:
     - address
   architecture:
