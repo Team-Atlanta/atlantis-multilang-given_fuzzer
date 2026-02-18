@@ -9,6 +9,9 @@
 #   docker run multilang-given_fuzzer-runner <harness_name> [args...]
 # =============================================================================
 
+ARG target_base_image
+ARG crs_version
+
 # Docker will check local first, then pull from registry if not found
 FROM ghcr.io/team-atlanta/multilang-given_fuzzer-crs:latest
 

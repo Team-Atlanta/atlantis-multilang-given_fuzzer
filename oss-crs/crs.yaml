@@ -8,7 +8,7 @@ prepare_phase:
   hcl: oss-crs/docker-bake.hcl
 
 target_build_phase:
-  uniafl-build:
+  - name: uniafl-build
     dockerfile: oss-crs/dockerfiles/builder.Dockerfile
     additional_env:
       BUILD_TYPE: uniafl
@@ -16,7 +16,7 @@ target_build_phase:
       - uniafl/build
       - uniafl/src
       - uniafl/project
-  coverage-build:
+  - name: coverage-build
     dockerfile: oss-crs/dockerfiles/builder.Dockerfile
     additional_env:
       BUILD_TYPE: coverage
@@ -44,5 +44,5 @@ supported_target:
   architecture:
     - x86_64
 
-allowed_llms:
+required_llms:
   - o3
