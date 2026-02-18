@@ -39,6 +39,3 @@ supported_target:
     - address
   architecture:
     - x86_64
-
-required_llms:
-  - o3
