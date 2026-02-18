@@ -17,25 +17,22 @@ libCRS register-submit-dir pov /povs
 libCRS register-submit-dir seed /seeds
 libCRS register-submit-dir bug-candidate /bug-candidates
 
-# Automatically fetch shared data from oss-crs-infra (other CRS generated)
+# Periodically fetch shared data from other CRSs (via framework exchange)
 libCRS register-fetch-dir pov /shared-povs
 libCRS register-fetch-dir seed /shared-seeds
 libCRS register-fetch-dir bug-candidate /shared-bug-candidates
 
 # =============================================================================
-# or you can submit one by one in CRS
+# One-time fetch: bootup data from crs-compose run flags
 # =============================================================================
-# libCRS submit pov <pov_file_path>
-# libCRS submit seed <seed_file_path>
-# libCRS submit bug-candidate <bug_candidate_file_path>
 
-# =============================================================================
-# or you download all new shared data in CRS
-# =============================================================================
-# libCRS fetch povs <output_dir_path> # return a list of file names
-# libCRS fetch seeds <output_dir_path>
-# libCRS fetch bug-candidates <output_dir_path>
-
+# Fetch diff for delta mode (--diff flag → FETCH_DIR/diff/ref.diff)
+mkdir -p /shared-diffs
+libCRS fetch diff /shared-diffs || echo "[entrypoint] No diff available (full mode)"
+if [ -f "/shared-diffs/ref.diff" ]; then
+    cp /shared-diffs/ref.diff /src/ref.diff
+    echo "[entrypoint] Delta mode: ref.diff available at /src/ref.diff"
+fi
 
 # =============================================================================
 # Set env up for this CRS
@@ -48,7 +45,7 @@ mkdir -p "/crs-data"
 export POV_DIR="/povs"
 export CORPUS_DIR="/corpus"
 export CRS_DATA_DIR="/crs-data"
-export SEED_SHARE_DIR="/seed_share_dir"
+export SEED_SHARE_DIR="/shared-seeds"
 export BUG_CANDIDATE_DIR="/bug-candidates"
 
 main.py

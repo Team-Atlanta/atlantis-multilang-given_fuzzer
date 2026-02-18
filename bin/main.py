@@ -431,22 +431,24 @@ class AnyHR(HarnessRunner):
         await self.crs.uniafl.async_run(self)
 
     async def __copy_corpus_from_other_cp(self, dst):
-        """OSS-CRS: load initial seeds from all /seed_share_dir/*/ directories"""
+        """Load initial seeds from shared seeds (bootup corpus + other CRSs)"""
         seed_share_dir = Path(get_seed_share_dir())
         if not seed_share_dir.exists():
             return
         crs_name = os.environ.get("CRS_NAME", "atlantis-multilang-given_fuzzer")
-        candidates = [
-            d for d in seed_share_dir.iterdir()
-            if d.is_dir() and d.name != crs_name
-        ]
-        if len(candidates) == 0:
+        loaded = 0
+        for entry in seed_share_dir.iterdir():
+            if entry.is_dir():
+                if entry.name == crs_name:
+                    continue
+                await util.async_cp(entry, dst)
+                self.log(f"Reuse corpus from {entry}")
+                loaded += 1
+            elif entry.is_file() and not entry.name.startswith("."):
+                await util.async_cp(entry, dst / entry.name)
+                loaded += 1
+        if loaded == 0:
             self.log(f"No reusable corpus found for {self.harness.name}")
-            return
-        for candidate in candidates:
-            if candidate.is_dir():
-                await util.async_cp(candidate, dst)
-                self.log(f"Reuse corpus from {candidate}")
 
     async def __unzip_given_corpus(self, dst):
         corpus = self.harness.get_given_corpus()

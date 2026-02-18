@@ -27,16 +27,25 @@ class SeedShare:
         self.copy_all_others_to_ours()
 
     def copy_all_others_to_ours(self):
-        """OSS-CRS: read from ALL /seed_share_dir/*/ directories"""
+        """Load seeds from share_dir: both flat files and CRS subdirectories"""
         if not self.share_dir.exists():
             return
         crs_name = os.environ.get("CRS_NAME", "atlantis-multilang-given_fuzzer")
-        for crs_dir in self.share_dir.iterdir():
-            if not crs_dir.is_dir():
-                continue
-            if crs_dir.name == crs_name:
-                continue  # skip our own
-            self._load_from(crs_dir)
+        for entry in self.share_dir.iterdir():
+            if entry.is_dir():
+                if entry.name == crs_name:
+                    continue  # skip our own subdir
+                self._load_from(entry)
+            else:
+                # Flat files from libCRS register-fetch-dir
+                self._load_file(entry)
+
+    def _load_file(self, src_seed):
+        if src_seed in self.loaded or src_seed.name.startswith(".") or src_seed.name.endswith(".cov"):
+            return
+        self.loaded.add(src_seed)
+        dst = self.our_dst_dir / src_seed.name
+        cp(src_seed, dst)
 
     def _load_from(self, src_dir):
         if not src_dir.exists():
