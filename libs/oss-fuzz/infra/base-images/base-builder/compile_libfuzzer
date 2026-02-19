@@ -21,5 +21,12 @@ if [ "$FUZZING_LANGUAGE" = "go" ]; then
     export LIB_FUZZING_ENGINE="$LIB_FUZZING_ENGINE $GOPATH/gosigfuzz/gosigfuzz.o"
 fi
 
-cp /usr/local/lib/clang/*/lib/$ARCHITECTURE-unknown-linux-gnu/libclang_rt.fuzzer.a $LIB_FUZZING_ENGINE_DEPRECATED
+# Copy the real .a to a separate file, then create a linker script at the
+# deprecated path that pulls in -lrt.  The custom libFuzzer build includes
+# FuzzerShm/manager objects that reference shm_open/shm_unlink (POSIX shm).
+# Projects linking the .a directly (e.g. systemd via meson find_library)
+# would otherwise get undefined-reference errors.
+REAL_LIB="${LIB_FUZZING_ENGINE_DEPRECATED%.a}_impl.a"
+cp /usr/local/lib/clang/*/lib/$ARCHITECTURE-unknown-linux-gnu/libclang_rt.fuzzer.a "$REAL_LIB"
+echo "INPUT($REAL_LIB -lrt)" > "$LIB_FUZZING_ENGINE_DEPRECATED"
 echo " done."

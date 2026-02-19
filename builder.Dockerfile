@@ -27,6 +27,7 @@ FROM ${parent_image}
 COPY --from=crs-tools-c /multilang-builder/llvm-patched /opt/llvm-patched
 COPY --from=crs-tools-c /multilang-builder/libclang_rt.fuzzer.a /usr/local/lib/clang/18/lib/x86_64-unknown-linux-gnu/libclang_rt.fuzzer.a
 COPY --from=crs-tools-c /multilang-builder/compile /usr/local/bin/compile
+COPY --from=crs-tools-c /multilang-builder/compile_libfuzzer /usr/local/bin/compile_libfuzzer
 COPY --from=crs-tools-jvm /multilang-builder/jazzer_agent_deploy.jar /usr/local/bin/jazzer_agent_deploy.jar
 COPY --from=crs-tools-jvm /multilang-builder/jazzer_driver /usr/local/bin/jazzer_driver
 COPY --from=crs-tools-jvm /multilang-builder/jazzer_api_deploy.jar /usr/local/lib/jazzer_api_deploy.jar
