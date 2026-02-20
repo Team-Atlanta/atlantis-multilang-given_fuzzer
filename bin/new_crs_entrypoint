@@ -1,4 +1,9 @@
 #!/bin/bash
+set -e
+
+# System tuning
+sysctl -w fs.file-max=2097152 2>/dev/null || true
+ulimit -c 0 2>/dev/null || true
 
 # =============================================================================
 # Download build outputs
@@ -8,12 +13,18 @@ libCRS download-build-output uniafl/src /src
 libCRS download-build-output uniafl/project /src/
 libCRS download-build-output coverage/build /coverage-out || echo "[entrypoint] coverage/build not available, continuing without coverage"
 
+# Fallback if project.yaml not found after extracting build outputs
+if [ ! -f "/src/project.yaml" ]; then
+    echo "[entrypoint] WARNING: project.yaml not found, defaulting to language=c"
+    echo "language: c" > /src/project.yaml
+fi
+
 # =============================================================================
 # Register dirs
 # =============================================================================
 
 # Automatically submit povs/seeds in these directories to oss-crs-infra
-libCRS register-submit-dir pov /povs 
+libCRS register-submit-dir pov /povs
 libCRS register-submit-dir seed /seeds
 libCRS register-submit-dir bug-candidate /bug-candidates
 
@@ -38,7 +49,9 @@ fi
 # Set env up for this CRS
 # =============================================================================
 
-export CRS_TARGET=$OSS_CRS_TARGET
+export CRS_TARGET="$OSS_CRS_TARGET"
+export SANITIZER="${SANITIZER:-address}"
+export OUT="/out"
 echo "{\"target_harnesses\": [\"$OSS_CRS_TARGET_HARNESS\"]}" > /crs.config
 
 mkdir -p "/crs-data"
@@ -46,6 +59,6 @@ export POV_DIR="/povs"
 export CORPUS_DIR="/corpus"
 export CRS_DATA_DIR="/crs-data"
 export SEED_SHARE_DIR="/shared-seeds"
-export BUG_CANDIDATE_DIR="/bug-candidates"
+# export BUG_CANDIDATE_DIR="/bug-candidates"  # registered via libCRS, no consumer reads this env var
 
 main.py

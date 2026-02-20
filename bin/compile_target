@@ -9,15 +9,20 @@ log() {
 compile_uniafl_build() {
     log "  Compiling with UniAFL instrumentation..."
     compile
-    libCRS submit-build-output $OSS_CRS_TARGET_PROJ_DIR uniafl/project
-    libCRS submit-build-output $OUT uniafl/build
-    libCRS submit-build-output $SRC uniafl/src
+    libCRS submit-build-output "$OSS_CRS_TARGET_PROJ_DIR" uniafl/project
+    libCRS submit-build-output "$OUT" uniafl/build
+    libCRS submit-build-output "$SRC" uniafl/src
 }
 
 compile_coverage_build() {
     log "  Compiling with coverage instrumentation..."
-    SANITIZER=coverage compile
-    libCRS submit-build-output $OUT coverage/build
+    # Coverage build is best-effort; fuzzing works without it via addr2line fallback
+    if SANITIZER=coverage compile; then
+        libCRS submit-build-output "$OUT" coverage/build
+    else
+        log "  Warning: Coverage build failed (fuzzing will use addr2line fallback)"
+        libCRS skip-build-output coverage/build
+    fi
 }
 
 if [ "$FUZZING_LANGUAGE" = "c" ] || [ "$FUZZING_LANGUAGE" = "c++" ]; then
@@ -26,6 +31,9 @@ if [ "$FUZZING_LANGUAGE" = "c" ] || [ "$FUZZING_LANGUAGE" = "c++" ]; then
         compile_uniafl_build
     elif [ "$BUILD_TYPE" = "coverage" ]; then
         compile_coverage_build
+    else
+        log "Unknown BUILD_TYPE: $BUILD_TYPE"
+        exit 1
     fi
     exit 0
 elif [ "$FUZZING_LANGUAGE" = "jvm" ]; then
@@ -34,6 +42,9 @@ elif [ "$FUZZING_LANGUAGE" = "jvm" ]; then
         compile_uniafl_build
     elif [ "$BUILD_TYPE" = "coverage" ]; then
         libCRS skip-build-output coverage/build
+    else
+        log "Unknown BUILD_TYPE: $BUILD_TYPE"
+        exit 1
     fi
     exit 0
 else
