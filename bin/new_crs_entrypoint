@@ -11,7 +11,12 @@ ulimit -c 0 2>/dev/null || true
 libCRS download-build-output uniafl/build /out
 libCRS download-build-output uniafl/src /src
 libCRS download-build-output uniafl/project /src/
-libCRS download-build-output coverage/build /coverage-out || echo "[entrypoint] coverage/build not available, continuing without coverage"
+OSS_CRS_BUILD_OUT_DIR="${OSS_CRS_BUILD_OUT_DIR:-/OSS_CRS_BUILD_OUT_DIR}"
+if [ -d "${OSS_CRS_BUILD_OUT_DIR}/coverage/build" ]; then
+    libCRS download-build-output coverage/build /coverage-out
+else
+    echo "[entrypoint] coverage/build not available, continuing without coverage"
+fi
 
 # Fallback if project.yaml not found after extracting build outputs
 if [ ! -f "/src/project.yaml" ]; then
