@@ -38,10 +38,11 @@ usage() {
 Build and publish given_fuzzer prepare images.
 
 USAGE:
-    ./oss-crs/publish-images.sh <command>
+    ./oss-crs/publish-images.sh <command> [options]
 
 COMMANDS:
-    prepare         Build the canonical prepare images locally from scratch
+    prepare         Prepare canonical images using bake defaults
+                    Pass --rebuild to force USE_PREBUILT=false
     push            Push the canonical prepare images to the registry
     prepare-push    Run prepare, then push
     status          Show whether expected local image tags exist
@@ -64,14 +65,29 @@ ensure_local_tag() {
 }
 
 prepare_images() {
-    log "Building canonical prepare images locally"
+    local rebuild="${1:-false}"
+    local mode="using bake defaults"
+
+    if [ "${rebuild}" = "true" ]; then
+        mode="from scratch (USE_PREBUILT=false)"
+    fi
+
+    log "Preparing canonical images ${mode}"
     (
         cd "${PROJECT_DIR}"
-        USE_PREBUILT=false VERSION="${VERSION}" REGISTRY="${REGISTRY}" \
-            docker buildx bake \
-            -f oss-crs/docker-bake.hcl \
-            --set "*.platform=${PLATFORM}" \
-            prepare
+        if [ "${rebuild}" = "true" ]; then
+            USE_PREBUILT=false VERSION="${VERSION}" REGISTRY="${REGISTRY}" \
+                docker buildx bake \
+                -f oss-crs/docker-bake.hcl \
+                --set "*.platform=${PLATFORM}" \
+                prepare
+        else
+            VERSION="${VERSION}" REGISTRY="${REGISTRY}" \
+                docker buildx bake \
+                -f oss-crs/docker-bake.hcl \
+                --set "*.platform=${PLATFORM}" \
+                prepare
+        fi
     )
 }
 
@@ -120,7 +136,18 @@ status_images() {
 main() {
     case "${1:-help}" in
         prepare)
-            prepare_images
+            case "${2:-}" in
+                "")
+                    prepare_images
+                    ;;
+                --rebuild)
+                    prepare_images true
+                    ;;
+                *)
+                    echo "unknown option for prepare: ${2}" >&2
+                    exit 1
+                    ;;
+            esac
             ;;
         push)
             push_images

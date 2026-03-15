@@ -32,6 +32,46 @@ if [[ "$(resolve_version)" != "9.9.9" ]]; then
 fi
 EOF
 
+bash <<'EOF'
+set -euo pipefail
+set -- help
+source "${SCRIPT_PATH}" >/dev/null
+
+prepare_log="$(mktemp)"
+rebuild_log="$(mktemp)"
+trap 'rm -f "${prepare_log}" "${rebuild_log}"' EXIT
+
+docker() {
+  local log_path="$DOCKER_LOG_PATH"
+  {
+    printf 'USE_PREBUILT=%s\n' "${USE_PREBUILT-}"
+    printf 'VERSION=%s\n' "${VERSION-}"
+    printf 'REGISTRY=%s\n' "${REGISTRY-}"
+    printf 'ARGS=%s\n' "$*"
+  } > "${log_path}"
+}
+
+VERSION=7.7.7
+REGISTRY=ghcr.io/example
+PLATFORM=linux/amd64
+
+DOCKER_LOG_PATH="${prepare_log}"
+prepare_images
+
+grep -qx 'USE_PREBUILT=' "${prepare_log}"
+grep -qx 'VERSION=7.7.7' "${prepare_log}"
+grep -qx 'REGISTRY=ghcr.io/example' "${prepare_log}"
+grep -qx 'ARGS=buildx bake -f oss-crs/docker-bake.hcl --set \*.platform=linux/amd64 prepare' "${prepare_log}"
+
+DOCKER_LOG_PATH="${rebuild_log}"
+prepare_images true
+
+grep -qx 'USE_PREBUILT=false' "${rebuild_log}"
+grep -qx 'VERSION=7.7.7' "${rebuild_log}"
+grep -qx 'REGISTRY=ghcr.io/example' "${rebuild_log}"
+grep -qx 'ARGS=buildx bake -f oss-crs/docker-bake.hcl --set \*.platform=linux/amd64 prepare' "${rebuild_log}"
+EOF
+
 python3 - <<'EOF'
 from pathlib import Path
 root = Path(__import__("os").environ["ROOT_DIR"])
