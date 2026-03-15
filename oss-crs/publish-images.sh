@@ -4,9 +4,9 @@ set -euo pipefail
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
+CRS_YAML="${SCRIPT_DIR}/crs.yaml"
 
 REGISTRY="${REGISTRY:-ghcr.io/team-atlanta}"
-VERSION="${VERSION:-1.0.0}"
 PLATFORM="${PLATFORM:-linux/amd64}"
 
 IMAGES=(
@@ -21,6 +21,17 @@ IMAGES=(
 log() {
     echo "[publish-images] $*"
 }
+
+resolve_version() {
+    if [ -n "${VERSION:-}" ]; then
+        echo "${VERSION}"
+        return
+    fi
+
+    awk '/^version:/ { print $2; exit }' "${CRS_YAML}"
+}
+
+VERSION="$(resolve_version)"
 
 usage() {
     cat <<EOF
@@ -38,7 +49,7 @@ COMMANDS:
 
 ENVIRONMENT:
     REGISTRY        Registry prefix (default: ghcr.io/team-atlanta)
-    VERSION         Version tag to push alongside latest (default: 1.0.0)
+    VERSION         Version tag to push alongside latest (default: oss-crs/crs.yaml version)
     PLATFORM        Build platform for docker buildx bake (default: linux/amd64)
 
 IMAGES:
@@ -106,27 +117,33 @@ status_images() {
     done
 }
 
-case "${1:-help}" in
-    prepare)
-        prepare_images
-        ;;
-    push)
-        push_images
-        ;;
-    prepare-push)
-        prepare_images
-        push_images
-        ;;
-    status)
-        status_images
-        ;;
-    help|--help|-h)
-        usage
-        ;;
-    *)
-        echo "unknown command: ${1}" >&2
-        echo "" >&2
-        usage >&2
-        exit 1
-        ;;
-esac
+main() {
+    case "${1:-help}" in
+        prepare)
+            prepare_images
+            ;;
+        push)
+            push_images
+            ;;
+        prepare-push)
+            prepare_images
+            push_images
+            ;;
+        status)
+            status_images
+            ;;
+        help|--help|-h)
+            usage
+            ;;
+        *)
+            echo "unknown command: ${1}" >&2
+            echo "" >&2
+            usage >&2
+            exit 1
+            ;;
+    esac
+}
+
+if [[ "${BASH_SOURCE[0]}" == "$0" ]]; then
+    main "$@"
+fi

@@ -38,7 +38,7 @@ variable "VERSION" {
 # When true (default): Pull cached images from registry, build only if cache miss
 # When false: Build everything from scratch locally
 variable "USE_PREBUILT" {
-  default = false
+  default = true
 }
 
 # Helper function to generate tags
