@@ -13,7 +13,7 @@ ARG target_base_image
 ARG crs_version=latest
 
 # Docker will check local first, then pull from registry if not found
-FROM ghcr.io/team-atlanta/multilang-given_fuzzer-crs:${crs_version}
+FROM ghcr.io/team-atlanta/atlantis-multilang-given_fuzzer/multilang-given_fuzzer-crs:${crs_version}
 
 COPY --from=libcrs . /libCRS
 RUN /libCRS/install.sh

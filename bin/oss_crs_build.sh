@@ -13,7 +13,7 @@
 #   ./oss_crs_build.sh --status           # Check local/remote image status
 #
 # Environment:
-#   REGISTRY    - Registry prefix (default: ghcr.io/team-atlanta)
+#   REGISTRY    - Registry prefix (default: ghcr.io/team-atlanta/atlantis-multilang-given_fuzzer)
 #   VERSION     - Image version tag (default: latest)
 #
 # =============================================================================
@@ -24,7 +24,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 
 # Configuration
-REGISTRY="${REGISTRY:-ghcr.io/team-atlanta}"
+REGISTRY="${REGISTRY:-ghcr.io/team-atlanta/atlantis-multilang-given_fuzzer}"
 VERSION="${VERSION:-latest}"
 
 # Images to build/push
@@ -115,7 +115,7 @@ OPTIONS:
     --help      Show this help
 
 ENVIRONMENT:
-    REGISTRY    Registry prefix (default: ghcr.io/team-atlanta)
+    REGISTRY    Registry prefix (default: ghcr.io/team-atlanta/atlantis-multilang-given_fuzzer)
     VERSION     Image version tag (default: latest)
 
 EXAMPLES:

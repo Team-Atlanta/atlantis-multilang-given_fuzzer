@@ -16,8 +16,8 @@
 ARG parent_image=ubuntu:22.04
 
 # Reference archive images for CRS build tools
-FROM ghcr.io/team-atlanta/multilang-given_fuzzer-c-archive:latest AS crs-tools-c
-FROM ghcr.io/team-atlanta/multilang-given_fuzzer-jvm-archive:latest AS crs-tools-jvm
+FROM ghcr.io/team-atlanta/atlantis-multilang-given_fuzzer/multilang-given_fuzzer-c-archive:latest AS crs-tools-c
+FROM ghcr.io/team-atlanta/atlantis-multilang-given_fuzzer/multilang-given_fuzzer-jvm-archive:latest AS crs-tools-jvm
 
 # =============================================================================
 # Builder: parent_image + CRS tools

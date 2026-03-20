@@ -6,7 +6,7 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CRS_YAML="${SCRIPT_DIR}/crs.yaml"
 
-REGISTRY="${REGISTRY:-ghcr.io/team-atlanta}"
+REGISTRY="${REGISTRY:-ghcr.io/team-atlanta/atlantis-multilang-given_fuzzer}"
 PLATFORM="${PLATFORM:-linux/amd64}"
 
 IMAGES=(
@@ -49,7 +49,7 @@ COMMANDS:
     help            Show this help
 
 ENVIRONMENT:
-    REGISTRY        Registry prefix (default: ghcr.io/team-atlanta)
+    REGISTRY        Registry prefix (default: ghcr.io/team-atlanta/atlantis-multilang-given_fuzzer)
     VERSION         Version tag to push alongside latest (default: oss-crs/crs.yaml version)
     PLATFORM        Build platform for docker buildx bake (default: linux/amd64)
 

@@ -2,7 +2,7 @@ name: atlantis-multilang-given_fuzzer
 type:
   - bug-finding
 version: 1.0.0
-docker_registry: ghcr.io/team-atlanta
+docker_registry: ghcr.io/team-atlanta/atlantis-multilang-given_fuzzer
 
 prepare_phase:
   hcl: oss-crs/docker-bake.hcl

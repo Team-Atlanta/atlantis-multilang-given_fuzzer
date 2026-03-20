@@ -28,7 +28,7 @@ variable "BASE_IMAGES_DIR" {
 }
 
 variable "REGISTRY" {
-  default = "ghcr.io/team-atlanta"
+  default = "ghcr.io/team-atlanta/atlantis-multilang-given_fuzzer"
 }
 
 variable "VERSION" {
