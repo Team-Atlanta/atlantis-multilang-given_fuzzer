@@ -41,14 +41,26 @@ variable "USE_PREBUILT" {
   default = true
 }
 
+# OCI labels for automatic GitHub repository linking
+variable "REPO_URL" {
+  default = "https://github.com/Team-Atlanta/atlantis-multilang-given_fuzzer"
+}
+
 # Helper function to generate tags
 function "tags" {
   params = [name]
   result = [
     "${REGISTRY}/${name}:${VERSION}",
     "${REGISTRY}/${name}:latest",
-    "${name}:latest"
   ]
+}
+
+# Common labels applied to all targets
+function "oci_labels" {
+  params = []
+  result = {
+    "org.opencontainers.image.source" = "${REPO_URL}"
+  }
 }
 
 # Helper to get image source (registry or local build target)
@@ -92,6 +104,7 @@ target "multilang-given_fuzzer-clang" {
   context    = "${BASE_IMAGES_DIR}/multilang-clang"
   dockerfile = "Dockerfile"
   tags       = tags("multilang-given_fuzzer-clang")
+  labels     = oci_labels()
   cache-from = USE_PREBUILT ? ["type=registry,ref=${REGISTRY}/multilang-given_fuzzer-clang:${VERSION}"] : []
 }
 
@@ -101,6 +114,7 @@ target "multilang-given_fuzzer-builder" {
   context    = "${BASE_IMAGES_DIR}/base-builder"
   dockerfile = "Dockerfile.multilang"
   tags       = tags("multilang-given_fuzzer-builder")
+  labels     = oci_labels()
   contexts = {
     multilang-clang = image_source("multilang-given_fuzzer-clang")
   }
@@ -113,6 +127,7 @@ target "multilang-given_fuzzer-builder-jvm" {
   context    = "${BASE_IMAGES_DIR}/base-builder-jvm"
   dockerfile = "Dockerfile.multilang"
   tags       = tags("multilang-given_fuzzer-builder-jvm")
+  labels     = oci_labels()
   cache-from = USE_PREBUILT ? ["type=registry,ref=${REGISTRY}/multilang-given_fuzzer-builder-jvm:${VERSION}"] : []
 }
 
@@ -125,6 +140,7 @@ target "multilang-given_fuzzer-crs" {
   context    = "."
   dockerfile = "Dockerfile"
   tags       = tags("multilang-given_fuzzer-crs")
+  labels     = oci_labels()
   cache-from = USE_PREBUILT ? ["type=registry,ref=${REGISTRY}/multilang-given_fuzzer-crs:${VERSION}"] : []
 }
 
@@ -137,6 +153,7 @@ target "multilang-given_fuzzer-c-archive" {
   context    = "."
   dockerfile = "Dockerfile.c_archive"
   tags       = tags("multilang-given_fuzzer-c-archive")
+  labels     = oci_labels()
   contexts = {
     multilang-given_fuzzer-builder = image_source("multilang-given_fuzzer-builder")
   }
@@ -148,6 +165,7 @@ target "multilang-given_fuzzer-jvm-archive" {
   context    = "."
   dockerfile = "Dockerfile.jvm_archive"
   tags       = tags("multilang-given_fuzzer-jvm-archive")
+  labels     = oci_labels()
   contexts = {
     multilang-given_fuzzer-builder-jvm = image_source("multilang-given_fuzzer-builder-jvm")
   }
@@ -164,6 +182,7 @@ target "multilang-given_fuzzer-runner" {
   context    = "."
   dockerfile = "runner.Dockerfile"
   tags       = tags("multilang-given_fuzzer-runner")
+  labels     = oci_labels()
   contexts = {
     multilang-given_fuzzer-crs = image_source("multilang-given_fuzzer-crs")
   }
