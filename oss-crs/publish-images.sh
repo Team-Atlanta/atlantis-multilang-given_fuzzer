@@ -153,7 +153,14 @@ main() {
             push_images
             ;;
         prepare-push)
-            prepare_images
+            case "${2:-}" in
+                --rebuild)
+                    prepare_images true
+                    ;;
+                *)
+                    prepare_images
+                    ;;
+            esac
             push_images
             ;;
         status)

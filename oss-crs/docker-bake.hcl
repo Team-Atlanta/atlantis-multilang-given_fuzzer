@@ -32,7 +32,7 @@ variable "REGISTRY" {
 }
 
 variable "VERSION" {
-  default = "latest"
+  default = "1.0.0"
 }
 
 # When true (default): Pull cached images from registry, build only if cache miss
