@@ -7,7 +7,6 @@ PROJECT_DIR="$(cd "${SCRIPT_DIR}/.." && pwd)"
 CRS_YAML="${SCRIPT_DIR}/crs.yaml"
 
 REGISTRY="${REGISTRY:-ghcr.io/team-atlanta/atlantis-multilang-given_fuzzer}"
-PLATFORM="${PLATFORM:-linux/amd64}"
 
 IMAGES=(
     "multilang-given_fuzzer-clang"
@@ -51,7 +50,6 @@ COMMANDS:
 ENVIRONMENT:
     REGISTRY        Registry prefix (default: ghcr.io/team-atlanta/atlantis-multilang-given_fuzzer)
     VERSION         Version tag to push alongside latest (default: oss-crs/crs.yaml version)
-    PLATFORM        Build platform for docker buildx bake (default: linux/amd64)
 
 IMAGES:
 $(printf '    - %s\n' "${IMAGES[@]}")
@@ -79,13 +77,11 @@ prepare_images() {
             USE_PREBUILT=false VERSION="${VERSION}" REGISTRY="${REGISTRY}" \
                 docker buildx bake \
                 -f oss-crs/docker-bake.hcl \
-                --set "*.platform=${PLATFORM}" \
                 prepare
         else
             VERSION="${VERSION}" REGISTRY="${REGISTRY}" \
                 docker buildx bake \
                 -f oss-crs/docker-bake.hcl \
-                --set "*.platform=${PLATFORM}" \
                 prepare
         fi
     )
