@@ -61,7 +61,7 @@ echo "{\"target_harnesses\": [\"$OSS_CRS_TARGET_HARNESS\"]}" > /crs.config
 
 mkdir -p "/crs-data"
 export POV_DIR="/povs"
-export CORPUS_DIR="/corpus"
+export CORPUS_DIR="/seeds"
 export CRS_DATA_DIR="/crs-data"
 export SEED_SHARE_DIR="/shared-seeds"
 # export BUG_CANDIDATE_DIR="/bug-candidates"  # registered via libCRS, no consumer reads this env var
