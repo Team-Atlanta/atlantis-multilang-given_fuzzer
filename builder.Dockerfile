@@ -25,7 +25,11 @@ FROM ghcr.io/team-atlanta/atlantis-multilang-given_fuzzer/multilang-given_fuzzer
 FROM ${parent_image}
 
 COPY --from=crs-tools-c /multilang-builder/llvm-patched /opt/llvm-patched
-COPY --from=crs-tools-c /multilang-builder/libclang_rt.fuzzer.a /usr/local/lib/clang/18/lib/x86_64-unknown-linux-gnu/libclang_rt.fuzzer.a
+COPY --from=crs-tools-c /multilang-builder/libclang_rt.fuzzer.a /tmp/libclang_rt.fuzzer.a
+COPY install_libclang_rt_fuzzer.sh /usr/local/bin/install_libclang_rt_fuzzer.sh
+RUN chmod +x /usr/local/bin/install_libclang_rt_fuzzer.sh && \
+    /usr/local/bin/install_libclang_rt_fuzzer.sh /tmp/libclang_rt.fuzzer.a && \
+    rm -f /tmp/libclang_rt.fuzzer.a
 COPY --from=crs-tools-c /multilang-builder/compile /usr/local/bin/compile
 COPY --from=crs-tools-c /multilang-builder/compile_libfuzzer /usr/local/bin/compile_libfuzzer
 COPY --from=crs-tools-jvm /multilang-builder/jazzer_agent_deploy.jar /usr/local/bin/jazzer_agent_deploy.jar
