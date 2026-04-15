@@ -43,7 +43,7 @@ COPY --from=crs-tools-jvm /multilang-builder/jazzer_junit.jar /usr/local/bin/jaz
 
 # Install libCRS
 COPY --from=libcrs . /libCRS
-RUN /libCRS/install.sh
+RUN /libCRS/install.sh --cli
 
 # Copy OSS-Fuzz project files (Dockerfile, build.sh, project.yaml, .aixcc/, etc.) to /src/
 # This ensures project.yaml is available at runtime for language detection
